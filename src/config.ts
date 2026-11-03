@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 import * as z from "zod/v4";
 import { HandoffsError } from "./errors.ts";
+import { formatPath } from "./schema/errors.ts";
 import { AgentRef, Harness } from "./schema/handoff.ts";
 
 export interface RepoPaths {
@@ -153,15 +154,6 @@ export const DEFAULT_CONFIG: Config = Object.freeze({
   }),
 });
 
-function formatConfigPath(path: ReadonlyArray<PropertyKey>): string {
-  let out = "";
-  for (const seg of path) {
-    if (typeof seg === "number") out += `[${seg}]`;
-    else out += out === "" ? String(seg) : `.${String(seg)}`;
-  }
-  return out;
-}
-
 /** Missing file → defaults with no checks. Unreadable, malformed or invalid → HandoffsError("config_invalid"). */
 export function loadConfig(paths: RepoPaths): Config {
   if (!existsSync(paths.configPath)) {
@@ -178,7 +170,7 @@ export function loadConfig(paths: RepoPaths): Config {
   }
   const parsed = ConfigSchema.safeParse(raw);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => ({ path: formatConfigPath(i.path), message: i.message }));
+    const issues = parsed.error.issues.map((i) => ({ path: formatPath(i.path), message: i.message }));
     const summary = issues.map((i) => `${i.path === "" ? "(root)" : i.path}: ${i.message}`).join("; ");
     throw new HandoffsError("config_invalid", `${paths.configPath} is invalid: ${summary}`, {
       file: paths.configPath,
