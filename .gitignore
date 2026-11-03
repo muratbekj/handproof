@@ -1,0 +1,14 @@
+# planning docs and team scratch (local only)
+docs/
+notes/
+
+# node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# handoffs runtime state (when dogfooding in this repo)
+.handoffs/handoffs.db
+.handoffs/handoffs.db-*
+.handoffs/runs/
