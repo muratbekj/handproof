@@ -1,0 +1,24 @@
+{
+  "kind": "implement",
+  "title": "Add token refresh to auth",
+  "goal": "Users can refresh an expired access token without signing in again.",
+  "context": {
+    "summary": "The auth middleware currently rejects expired tokens with a 401 response.",
+    "files": [
+      {
+        "path": "src/auth/token.ts",
+        "why": "Holds the current token validation logic."
+      }
+    ]
+  },
+  "scope": {
+    "allowed": ["src/auth/**"]
+  },
+  "acceptance": [
+    {
+      "id": "ac1",
+      "description": "An expired token can be refreshed and the request succeeds.",
+      "check": "test"
+    }
+  ]
+}
