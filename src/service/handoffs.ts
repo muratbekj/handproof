@@ -119,10 +119,11 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
   const nowIso = (): string => deps.now().toISOString();
   const leaseFrom = (iso: string): string => new Date(Date.parse(iso) + leaseMs).toISOString();
 
-  /** Lazy lease expiry, then renewal of this agent's live leases (decision 5). */
+  /** Lazy lease expiry, interrupted verifications, then renewal of this agent's live leases (decision 5). */
   const tick = (): string => {
     const at = nowIso();
     repo.expireLeases(at);
+    repo.expireVerifications(at, leaseFrom(at));
     repo.renewLeases(agent.name, leaseFrom(at), at);
     return at;
   };
