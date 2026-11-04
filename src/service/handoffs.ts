@@ -53,6 +53,8 @@ export interface HandoffService {
   cancel(id: string, reason?: string): Result<Handoff>;
   /** Open handoffs addressed to this agent or "any", in claim order (for the inbox resource). */
   inbox(): Result<Handoff[]>;
+  /** Event timeline, seq ASC; no tick; [] for unknown ids. */
+  history(id: string): HandoffEvent[];
 }
 
 export function toSummary(h: Handoff): HandoffSummary {
@@ -156,6 +158,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     at: string,
     makeClaim: (h: Handoff) => Handoff["claim"],
     data: Record<string, unknown>,
+    issue: Issue | null,
   ): Result<Handoff> => {
     for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
       const h = repo.get(id);
@@ -171,6 +174,8 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
         }
         return fail({ error: t.code, message: t.reason, reason: t.reason });
       }
+      // Input is judged after the tick and the state check, so a lapsed lease reports lease_expired.
+      if (issue !== null) return fail(validationFailed([issue]));
       const claim = makeClaim(h);
       const ev: NewEvent = {
         at,
@@ -255,7 +260,11 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
             if (repo.tryClaim(c.id, agent, leaseUntil, at)) {
               const won = repo.get(c.id);
               if (won !== null) return ok(won);
+              continue;
             }
+            // Lost the race: a same-name process winning is still our claim.
+            const now = repo.get(c.id);
+            if (now !== null && now.claim?.by.name === agent.name) return ok(now);
           }
           return fail({ error: "nothing_to_claim", message: `no open handoffs addressed to ${agent.name} or any` });
         }
@@ -298,7 +307,6 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
 
     update(id, note) {
       const issue = textIssue("note", note, NOTE_MAX);
-      if (issue !== null) return fail(validationFailed([issue]));
       return guarded((at) => {
         const leaseUntil = leaseFrom(at);
         return applyTransition(
@@ -307,14 +315,14 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           at,
           (h) => (h.claim === null ? null : { ...h.claim, leaseUntil }),
           { note, leaseUntil },
+          issue,
         );
       });
     },
 
     release(id, reason) {
       const issue = textIssue("reason", reason, REASON_MAX);
-      if (issue !== null) return fail(validationFailed([issue]));
-      return guarded((at) => applyTransition(id, "release", at, () => null, { reason }));
+      return guarded((at) => applyTransition(id, "release", at, () => null, { reason }, issue));
     },
 
     inbox() {
@@ -322,13 +330,14 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     },
 
     cancel(id, reason) {
-      if (reason !== undefined) {
-        const issue = textIssue("reason", reason, REASON_MAX);
-        if (issue !== null) return fail(validationFailed([issue]));
-      }
+      const issue = reason === undefined ? null : textIssue("reason", reason, REASON_MAX);
       return guarded((at) =>
-        applyTransition(id, "cancel", at, () => null, reason === undefined ? {} : { reason }),
+        applyTransition(id, "cancel", at, () => null, reason === undefined ? {} : { reason }, issue),
       );
+    },
+
+    history(id) {
+      return repo.events(id);
     },
   };
 }
