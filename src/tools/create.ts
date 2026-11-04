@@ -16,7 +16,19 @@ export function registerCreate(server: McpServer, service: HandoffService): void
     // The service validates schema and business rules together, so raw args go straight through.
     (raw) =>
       safely("handoff_create", () =>
-        fromResult(service.create(raw), (v) => ({ handoff: toSummary(v.handoff), warnings: v.warnings })),
+        fromResult(service.create(raw), (v) => {
+          const preexisting = v.handoff.repo.preexisting.length;
+          return {
+            handoff: toSummary(v.handoff),
+            warnings: v.warnings,
+            preexisting,
+            ...(preexisting > 0
+              ? {
+                  note: `${preexisting} uncommitted file(s) already existed; the scope check ignores them unless they are modified after this point`,
+                }
+              : {}),
+          };
+        }),
       ),
   );
 }

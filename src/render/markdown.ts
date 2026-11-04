@@ -1,4 +1,4 @@
-import type { Handoff } from "../schema/handoff.ts";
+import { type Handoff, preexistingOf } from "../schema/handoff.ts";
 import type { HandoffEvent } from "../store/repo.ts";
 import type { Verification } from "../verify/verify.ts";
 
@@ -61,6 +61,12 @@ function latestVerification(events: HandoffEvent[]): Verification | null {
   return null;
 }
 
+/** Verifications stored by Phase 2 have no `scope.ignored`. */
+function ignoredOf(v: Verification): string[] {
+  const ignored: unknown = (v.scope as { ignored?: unknown }).ignored;
+  return Array.isArray(ignored) ? ignored.filter((p): p is string => typeof p === "string") : [];
+}
+
 function yesNo(b: boolean): string {
   return b ? "yes" : "no";
 }
@@ -86,6 +92,10 @@ function verificationBody(v: Verification | null): string {
     lines.push(`**Scope:** base ${v.scope.base.slice(0, 12)}${v.scope.usedMergeBase ? " (merge-base fallback)" : ""}`);
   }
   lines.push(list(v.scope.violations.map((x) => `${code(x.path)} — ${esc(x.rule)}`)), "");
+  const ignored = ignoredOf(v);
+  if (ignored.length > 0) {
+    lines.push("**Ignored (unchanged since create):**", list(ignored.map(code)), "");
+  }
   lines.push(
     list(
       v.criteria.map(
@@ -112,6 +122,7 @@ export function renderBrief(h: Handoff, events: HandoffEvent[]): string {
     section("Links", list(h.context.links.map(esc))),
     section("Constraints", list(h.constraints.map(esc))),
     section("Scope", scopeBody(h)),
+    section("Pre-existing changes", list(preexistingOf(h).map((p) => code(p.path)))),
     section("Acceptance", list(h.acceptance.map(acceptanceItem))),
     section("Result", resultBody(h)),
   ];

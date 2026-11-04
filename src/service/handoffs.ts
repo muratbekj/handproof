@@ -10,6 +10,7 @@ import { isBusy } from "../store/db.ts";
 import type { HandoffEvent, HandoffRepo, NewEvent, StatePatch } from "../store/repo.ts";
 import { transition } from "./lifecycle.ts";
 import { rolesFor } from "./roles.ts";
+import { snapshotDirty } from "../verify/scope.ts";
 import { scanSecrets, secretError } from "../verify/secrets.ts";
 import { type Verification, checksTimeoutSec, verifyHandoff } from "../verify/verify.ts";
 
@@ -315,13 +316,15 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
         if (head === null) {
           return fail({ error: "no_commits", message: "the repository has no commits; commit once before creating a handoff" });
         }
+        // Uncommitted work that is already there isn't the implementer's (throws too_many_preexisting_changes).
+        const preexisting = snapshotDirty(paths.worktreeRoot);
         const handoff: Handoff = {
           ...parsed.value,
           id: newHandoffId(),
           schemaVersion: 1,
           status: "open",
           from: agent,
-          repo: { root: paths.root, branch: git.branch(), baseCommit: head },
+          repo: { root: paths.root, branch: git.branch(), baseCommit: head, worktree: paths.worktreeRoot, preexisting },
           claim: null,
           result: null,
           createdAt: at,
