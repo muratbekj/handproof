@@ -277,15 +277,22 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
         const t = transition(h.status, "claim", roles);
         if (!t.ok) return fail({ error: t.code, message: t.reason, reason: t.reason });
 
-        if (repo.tryClaim(id, agent, leaseUntil, at)) {
-          const won = repo.get(id);
-          return won === null ? fail(notFound(id)) : ok(won);
+        // A lost tryClaim may be a same-name process winning: that is still our claim (idempotent).
+        for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+          if (repo.tryClaim(id, agent, leaseUntil, at)) {
+            const won = repo.get(id);
+            return won === null ? fail(notFound(id)) : ok(won);
+          }
+          const now = repo.get(id);
+          if (now === null) return fail(notFound(id));
+          if ((now.status === "claimed" || now.status === "changes_requested") && now.claim !== null) {
+            return now.claim.by.name === agent.name ? ok(now) : fail(alreadyClaimed(id, now.claim.by.name));
+          }
+          if (now.status === "open") continue;
+          const after = transition(now.status, "claim", rolesFor(agent, now));
+          return fail(after.ok ? dbBusy() : { error: after.code, message: after.reason, reason: after.reason });
         }
-        const now = repo.get(id);
-        if (now === null) return fail(notFound(id));
-        if (now.claim !== null && now.claim.by.name !== agent.name) return fail(alreadyClaimed(id, now.claim.by.name));
-        const after = transition(now.status, "claim", rolesFor(agent, now));
-        return fail(after.ok ? dbBusy() : { error: after.code, message: after.reason, reason: after.reason });
+        return fail(dbBusy());
       });
     },
 
