@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "handoffs": {
+      "command": "bunx",
+      "args": ["handoffs-mcp", "serve"],
+      "env": {
+        "HANDOFFS_AGENT": "cursor-impl",
+        "HANDOFFS_HARNESS": "cursor"
+      }
+    }
+  }
+}
