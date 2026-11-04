@@ -38,7 +38,8 @@
   "repo": {
     "root": "/repo",
     "branch": "main",
-    "baseCommit": "0123456789abcdef"
+    "baseCommit": "0123456789abcdef",
+    "preexisting": []
   },
   "claim": null,
   "result": null,
