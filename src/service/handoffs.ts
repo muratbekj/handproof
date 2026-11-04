@@ -298,11 +298,12 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     return secrets === null ? ok(parsed.data) : fail(secrets);
   };
 
-  const alreadyClaimed = (id: string, by: string): ServiceError => ({
+  const alreadyClaimed = (id: string, claim: NonNullable<Handoff["claim"]>): ServiceError => ({
     error: "already_claimed",
-    message: `${id} is already claimed by ${by}`,
+    message: `${id} is already claimed by ${claim.by.name} until ${claim.leaseUntil}`,
     id,
-    by,
+    by: claim.by.name,
+    leaseUntil: claim.leaseUntil,
   });
 
   return {
@@ -390,7 +391,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           });
         }
         if ((h.status === "claimed" || h.status === "changes_requested") && h.claim !== null) {
-          return h.claim.by.name === agent.name ? ok(h) : fail(alreadyClaimed(id, h.claim.by.name));
+          return h.claim.by.name === agent.name ? ok(h) : fail(alreadyClaimed(id, h.claim));
         }
         const t = transition(h.status, "claim", roles);
         if (!t.ok) return fail({ error: t.code, message: t.reason, reason: t.reason });
@@ -404,7 +405,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           const now = repo.get(id);
           if (now === null) return fail(notFound(id));
           if ((now.status === "claimed" || now.status === "changes_requested") && now.claim !== null) {
-            return now.claim.by.name === agent.name ? ok(now) : fail(alreadyClaimed(id, now.claim.by.name));
+            return now.claim.by.name === agent.name ? ok(now) : fail(alreadyClaimed(id, now.claim));
           }
           if (now.status === "open") continue;
           const after = transition(now.status, "claim", rolesFor(agent, now));

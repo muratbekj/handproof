@@ -64,7 +64,8 @@ function refusal(err: ServiceError, id: string | undefined, agent: AgentRef): st
       return `No open handoffs for ${agent.name} right now. Check again later with \`handoff_list\` or read the \`handoff://inbox\` resource.`;
     case "already_claimed": {
       const by = typeof err.by === "string" ? err.by : "another agent";
-      return `${id ?? "That handoff"} is already claimed by ${by}. Run /pickup with no id to take the next one.`;
+      const until = typeof err.leaseUntil === "string" ? ` until ${err.leaseUntil}` : "";
+      return `${id ?? "That handoff"} is already claimed by ${by}${until}. Run /pickup with no id to take the next one.`;
     }
     case "not_found":
       return `There is no handoff with id ${id ?? "(none)"}. Check the id with \`handoff_list\`.`;
