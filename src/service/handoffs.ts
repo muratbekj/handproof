@@ -2,14 +2,16 @@ import type { Config, RepoPaths } from "../config.ts";
 import { isHandoffsError } from "../errors.ts";
 import type { GitInfo } from "../git.ts";
 import { newHandoffId } from "../ids.ts";
-import type { Issue } from "../schema/errors.ts";
+import * as z from "zod/v4";
+import { type Issue, zodToIssues } from "../schema/errors.ts";
 import type { AgentRef, Handoff, Kind, Priority, Status } from "../schema/handoff.ts";
 import { parseHandoffInput } from "../schema/rules.ts";
 import { isBusy } from "../store/db.ts";
-import type { HandoffEvent, HandoffRepo, NewEvent } from "../store/repo.ts";
+import type { HandoffEvent, HandoffRepo, NewEvent, StatePatch } from "../store/repo.ts";
 import { transition } from "./lifecycle.ts";
 import { rolesFor } from "./roles.ts";
 import { scanSecrets, secretError } from "../verify/secrets.ts";
+import { type Verification, checksTimeoutSec, verifyHandoff } from "../verify/verify.ts";
 
 export type ServiceError = { error: string; message: string; [k: string]: unknown };
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ServiceError };
@@ -44,6 +46,27 @@ export interface ListOptions {
   limit?: number;
 }
 
+export const SUMMARY_MAX = 4000;
+export const COMMITS_MAX = 50;
+
+/** Structure of a submit request; acceptance coverage is checked against the handoff separately. */
+export const SubmitInputSchema = z.object({
+  summary: z.string().describe(`What you did (1–${SUMMARY_MAX} chars)`),
+  commits: z.array(z.string()).max(COMMITS_MAX).optional().describe(`Commit shas (at most ${COMMITS_MAX})`),
+  criteria: z
+    .array(
+      z.object({
+        id: z.string().describe("Acceptance criterion id, e.g. ac1"),
+        met: z.boolean(),
+        note: z.string().max(2000).optional(),
+      }),
+    )
+    .describe("One self-report per acceptance criterion, each id exactly once"),
+});
+export type SubmitInput = z.infer<typeof SubmitInputSchema>;
+
+export type ReviewDecision = "accept" | "reject";
+
 export interface HandoffService {
   create(raw: unknown): Result<{ handoff: Handoff; warnings: Issue[] }>;
   list(f?: ListOptions): Result<HandoffSummary[]>;
@@ -56,6 +79,12 @@ export interface HandoffService {
   inbox(): Result<Handoff[]>;
   /** Event timeline, seq ASC; no tick; [] for unknown ids. */
   history(id: string): HandoffEvent[];
+  /** Claimant only: records the result, runs verification, ends verified or changes_requested. */
+  submit(id: string, input: unknown): Promise<Result<{ handoff: Handoff; verification: Verification }>>;
+  /** Re-runs verification on demand; logs a `verification` event and never changes status. */
+  verify(id: string): Promise<Result<{ verification: Verification }>>;
+  /** Creator or human, from verified: accept → done, reject → open with the attempt in context.tried. */
+  review(id: string, decision: ReviewDecision, reason?: string): Result<Handoff>;
 }
 
 export function toSummary(h: Handoff): HandoffSummary {
@@ -138,17 +167,30 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     return at;
   };
 
+  /** Busy and coded errors become a failed Result; anything else is rethrown. */
+  const caught = <T>(err: unknown): Result<T> => {
+    if (isBusy(err)) return fail(dbBusy());
+    if (isHandoffsError(err)) {
+      const extra = err.details !== null && typeof err.details === "object" ? (err.details as Record<string, unknown>) : {};
+      return fail({ ...extra, error: err.code, message: err.message });
+    }
+    throw err;
+  };
+
   /** Runs `fn` after the tick; maps busy and coded errors to a ServiceError. */
   const guarded = <T>(fn: (at: string) => Result<T>): Result<T> => {
     try {
       return fn(tick());
     } catch (err) {
-      if (isBusy(err)) return fail(dbBusy());
-      if (isHandoffsError(err)) {
-        const extra = err.details !== null && typeof err.details === "object" ? (err.details as Record<string, unknown>) : {};
-        return fail({ ...extra, error: err.code, message: err.message });
-      }
-      throw err;
+      return caught(err);
+    }
+  };
+
+  const guardedAsync = async <T>(fn: (at: string) => Promise<Result<T>>): Promise<Result<T>> => {
+    try {
+      return await fn(tick());
+    } catch (err) {
+      return caught(err);
     }
   };
 
@@ -202,6 +244,57 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
       // Lost the compare-and-set: loop re-reads and reports what the new state allows.
     }
     return fail(dbBusy());
+  };
+
+  const expectOf = (h: Handoff): { status: Status; claimBy?: string } =>
+    h.claim === null ? { status: h.status } : { status: h.status, claimBy: h.claim.by.name };
+
+  const inProgress = (id: string): ServiceError => ({
+    error: "verification_in_progress",
+    message: `${id} is being verified; wait for the submit to finish`,
+    id,
+  });
+
+  const runVerification = (h: Handoff): Promise<Verification> =>
+    verifyHandoff(h, { config, paths, now: deps.now, by: agent.name });
+
+  /** Submit input checked against `h`: structure, summary, acceptance coverage, then secrets. */
+  const parseSubmit = (h: Handoff, raw: unknown): Result<SubmitInput> => {
+    const input = raw ?? {};
+    const parsed = SubmitInputSchema.safeParse(input, { reportInput: true });
+    const issues: Issue[] = parsed.success ? [] : zodToIssues(parsed.error, input);
+    const summary = textIssue("summary", (input as Record<string, unknown>).summary, SUMMARY_MAX);
+    if (summary !== null && !issues.some((i) => i.path === "summary")) issues.push(summary);
+    if (parsed.success) {
+      const ids = new Set(h.acceptance.map((a) => a.id));
+      const seen = new Set<string>();
+      parsed.data.criteria.forEach((c, i) => {
+        if (!ids.has(c.id)) {
+          issues.push({
+            path: `criteria[${i}].id`,
+            problem: `unknown acceptance id '${c.id}'`,
+            fix: `use one of: ${[...ids].join(", ")}`,
+          });
+        } else if (seen.has(c.id)) {
+          issues.push({ path: `criteria[${i}].id`, problem: `duplicate acceptance id '${c.id}'`, fix: "report each criterion once" });
+        }
+        seen.add(c.id);
+      });
+      const missing = [...ids].filter((a) => !seen.has(a));
+      if (missing.length > 0) {
+        issues.push({
+          path: "criteria",
+          problem: `missing criteria for: ${missing.join(", ")}`,
+          fix: "report every acceptance criterion exactly once",
+        });
+      }
+    }
+    if (issues.length > 0 || !parsed.success) return fail(validationFailed(issues));
+    const secrets = secretError([
+      ...scanSecrets(parsed.data.summary, ["summary"]),
+      ...scanSecrets(parsed.data.criteria, ["criteria"]),
+    ]);
+    return secrets === null ? ok(parsed.data) : fail(secrets);
   };
 
   const alreadyClaimed = (id: string, by: string): ServiceError => ({
@@ -361,6 +454,149 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
 
     history(id) {
       return repo.events(id);
+    },
+
+    submit(id, raw) {
+      return guardedAsync(async (at) => {
+        // 1. State, permission and input, then 2. the submitted transaction (CAS, retried on a lost race).
+        let submitted: Handoff | null = null;
+        for (let attempt = 0; attempt < CAS_ATTEMPTS && submitted === null; attempt++) {
+          const h = repo.get(id);
+          if (h === null) return fail(notFound(id));
+          if (h.status === "submitted") return fail(inProgress(id));
+          const t = transition(h.status, "submit", rolesFor(agent, h));
+          if (!t.ok) {
+            if (lostToExpiry(h)) {
+              return fail({
+                error: "lease_expired",
+                message: `your lease on ${id} expired and the handoff was reopened; claim it again to continue`,
+                id,
+              });
+            }
+            return fail({ error: t.code, message: t.reason, reason: t.reason });
+          }
+          const checked = parseSubmit(h, raw);
+          if (!checked.ok) return checked;
+          const { summary, criteria } = checked.value;
+          const commits = checked.value.commits ?? [];
+          const deadline = new Date(Date.parse(at) + (checksTimeoutSec(h, config) + 60) * 1000).toISOString();
+          const next: Handoff = {
+            ...h,
+            status: t.to,
+            claim: h.claim === null ? null : { ...h.claim, leaseUntil: deadline },
+            result: { summary, commits, criteria },
+            updatedAt: at,
+          };
+          const ev: NewEvent = { at, actor: agent.name, type: "submitted", data: { summary, commits, deadline } };
+          if (repo.transitionState(id, expectOf(h), { status: next.status, claim: next.claim, updatedAt: at, doc: next }, ev)) {
+            submitted = next;
+          }
+        }
+        if (submitted === null) return fail(dbBusy());
+
+        // 3. Verification, outside any transaction.
+        const me = agent.name;
+        let verification: Verification;
+        try {
+          verification = await runVerification(submitted);
+        } catch (err) {
+          // Don't leave it stuck until the deadline: hand it back for changes, then report the error.
+          const end = nowIso();
+          const claim = submitted.claim === null ? null : { ...submitted.claim, leaseUntil: leaseFrom(end) };
+          repo.transitionState(
+            id,
+            { status: "submitted", claimBy: me },
+            { status: "changes_requested", claim, updatedAt: end },
+            { at: end, actor: "system", type: "verification_interrupted", data: { error: err instanceof Error ? err.message : String(err) } },
+          );
+          throw err;
+        }
+
+        // 4. Outcome transaction, compare-and-set on submitted + this claimant.
+        const end = nowIso();
+        const outcome = transition("submitted", verification.passed ? "verify_pass" : "verify_fail", new Set(["system"]));
+        if (!outcome.ok) throw new Error(outcome.reason);
+        const claim = submitted.claim === null ? null : { ...submitted.claim, leaseUntil: leaseFrom(end) };
+        const won = repo.transitionState(
+          id,
+          { status: "submitted", claimBy: me },
+          { status: outcome.to, claim, updatedAt: end },
+          { at: end, actor: "system", type: verification.passed ? "verified" : "changes_requested", data: { verification } },
+        );
+        if (!won) {
+          return fail({
+            error: "verification_interrupted",
+            message: `${id} was no longer submitted when verification finished (its deadline passed); submit again`,
+            id,
+          });
+        }
+        const after = repo.get(id);
+        return after === null ? fail(notFound(id)) : ok({ handoff: after, verification });
+      });
+    },
+
+    verify(id) {
+      return guardedAsync(async (at) => {
+        const h = repo.get(id);
+        if (h === null) return fail(notFound(id));
+        if (h.status === "submitted") return fail(inProgress(id));
+        if (h.status !== "claimed" && h.status !== "changes_requested" && h.status !== "verified") {
+          const reason = `cannot verify a handoff that is ${h.status}`;
+          return fail({ error: "invalid_transition", message: reason, reason });
+        }
+        const roles = rolesFor(agent, h);
+        if (!roles.has("claimant") && !roles.has("creator") && !roles.has("human")) {
+          const reason = "only the claimant or creator or human may verify";
+          return fail({ error: "not_permitted", message: reason, reason });
+        }
+        const verification = await runVerification(h);
+        repo.appendEvent(id, { at: nowIso(), actor: agent.name, type: "verification", data: { verification, requestedAt: at } });
+        return ok({ verification });
+      });
+    },
+
+    review(id, decision, reason) {
+      return guarded((at) => {
+        for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+          const h = repo.get(id);
+          if (h === null) return fail(notFound(id));
+          if (h.status === "submitted") return fail(inProgress(id));
+          const t = transition(h.status, decision, rolesFor(agent, h));
+          if (!t.ok) return fail({ error: t.code, message: t.reason, reason: t.reason });
+          if (reason !== undefined || decision === "reject") {
+            const issue = textIssue("reason", reason, REASON_MAX);
+            if (issue !== null) return fail(validationFailed([issue]));
+            const secrets = secretError(scanSecrets(reason, ["reason"]));
+            if (secrets !== null) return fail(secrets);
+          }
+          let patch: StatePatch;
+          let ev: NewEvent;
+          if (decision === "accept") {
+            patch = { status: t.to, claim: h.claim, updatedAt: at };
+            ev = { at, actor: agent.name, type: "accepted", data: reason === undefined ? {} : { reason } };
+          } else {
+            const why = reason ?? "";
+            const doc: Handoff = {
+              ...h,
+              status: t.to,
+              claim: null,
+              result: null,
+              context: {
+                ...h.context,
+                tried: [...h.context.tried, { approach: h.result?.summary ?? "", outcome: `rejected: ${why}` }],
+              },
+              updatedAt: at,
+            };
+            patch = { status: t.to, claim: null, updatedAt: at, doc };
+            ev = { at, actor: agent.name, type: "rejected", data: { reason: why } };
+          }
+          if (repo.transitionState(id, expectOf(h), patch, ev)) {
+            const after = repo.get(id);
+            return after === null ? fail(notFound(id)) : ok(after);
+          }
+        }
+        return fail(dbBusy());
+      });
     },
   };
 }
