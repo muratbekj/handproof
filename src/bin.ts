@@ -3,6 +3,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { loadConfig, resolveAgent, resolveRepo, runInit } from "./config.ts";
 import { isHandoffsError } from "./errors.ts";
 import { createServer } from "./server.ts";
+import { openService } from "./service/open.ts";
 import { VERSION } from "./version.ts";
 
 const USAGE = `usage: handoffs <command>
@@ -37,7 +38,8 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
   const paths = resolveRepo({ cwd, env });
   const config = loadConfig(paths);
   const agent = resolveAgent(env);
-  const handle = serveStdio(() => createServer({ paths, config, agent }), {
+  const opened = openService({ paths, config, agent });
+  const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service }), {
     onerror: (err) => {
       console.error(`handoffs: ${err.message}`);
     },
@@ -53,6 +55,7 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
     process.once("SIGTERM", done);
   });
   await handle.close().catch(() => undefined);
+  opened.close();
   return 0;
 }
 

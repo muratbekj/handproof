@@ -51,6 +51,8 @@ export interface HandoffService {
   update(id: string, note: string): Result<Handoff>;
   release(id: string, reason: string): Result<Handoff>;
   cancel(id: string, reason?: string): Result<Handoff>;
+  /** Open handoffs addressed to this agent or "any", in claim order (for the inbox resource). */
+  inbox(): Result<Handoff[]>;
 }
 
 export function toSummary(h: Handoff): HandoffSummary {
@@ -306,6 +308,10 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
       const issue = textIssue("reason", reason, REASON_MAX);
       if (issue !== null) return fail(validationFailed([issue]));
       return guarded((at) => applyTransition(id, "release", at, () => null, { reason }));
+    },
+
+    inbox() {
+      return guarded(() => ok(repo.claimCandidates(agent.name)));
     },
 
     cancel(id, reason) {
