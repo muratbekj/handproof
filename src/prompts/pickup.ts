@@ -1,0 +1,120 @@
+import type { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod/v4";
+import { type RepoPaths, loadConfig } from "../config.ts";
+import { renderBrief } from "../render/markdown.ts";
+import type { AgentRef, Handoff } from "../schema/handoff.ts";
+import type { HandoffService, Result, ServiceError } from "../service/handoffs.ts";
+import { serviceProtocolError } from "../rpc-error.ts";
+import { parseTokens, promptResult, promptSafely, toolCallBlock } from "./args.ts";
+
+const ArgsSchema = z.object({
+  id: z.string().optional().describe("handoff id (h_…) to claim; leave empty to take the next one addressed to you"),
+});
+
+const HELD: Handoff["status"][] = ["claimed", "changes_requested"];
+
+function unwrap<T>(r: Result<T>): T {
+  if (!r.ok) throw serviceProtocolError(r.error);
+  return r.value;
+}
+
+/** The handoff this agent already holds (oldest first), or null. A service read, so it renews the lease. */
+function heldBy(service: HandoffService, agent: AgentRef): string | null {
+  const held = unwrap(service.list({ status: HELD, mine: true, limit: 200 }))
+    .filter((h) => h.claimBy === agent.name)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  return held[0]?.id ?? null;
+}
+
+function submitBlock(h: Handoff): string {
+  return toolCallBlock("handoff_submit", {
+    id: h.id,
+    summary: "<what you changed and why>",
+    commits: ["<sha>"],
+    criteria: h.acceptance.map((a) => ({ id: a.id, met: true, note: "<how you know>" })),
+  });
+}
+
+function workText(h: Handoff, brief: string, leaseMinutes: number, lead: string): string {
+  const every = Math.max(1, Math.floor(leaseMinutes / 2));
+  const checks = [...new Set(h.acceptance.flatMap((a) => (a.check === undefined ? [] : [a.check])))];
+  const checkRule =
+    checks.length === 0
+      ? "- No acceptance item names a check; report each criterion honestly in the submit call."
+      : `- Before submitting, run the named checks locally (${checks.map((c) => `\`${c}\``).join(", ")}; commands are in \`.handoffs/config.json\`).`;
+  return [
+    lead,
+    "",
+    brief,
+    "",
+    "## How to work",
+    "- Stay inside `scope.allowed`; never touch `scope.forbidden`. Files outside scope fail verification.",
+    `- Call \`handoff_update\` with a short progress note at least every ${every} minutes, or the lease (${leaseMinutes} min) lapses and the handoff reopens.`,
+    checkRule,
+    "- If verification returns `changes_requested`, fix what it reports and submit again.",
+    "- When done, commit your work and make this call with real values, one `criteria` entry per acceptance item:",
+    "",
+    submitBlock(h),
+  ].join("\n");
+}
+
+function refusal(err: ServiceError, id: string | undefined, agent: AgentRef): string | null {
+  switch (err.error) {
+    case "nothing_to_claim":
+      return `No open handoffs for ${agent.name} right now. Check again later with \`handoff_list\` or read the \`handoff://inbox\` resource.`;
+    case "already_claimed": {
+      const by = typeof err.by === "string" ? err.by : "another agent";
+      return `${id ?? "That handoff"} is already claimed by ${by}. Run /pickup with no id to take the next one.`;
+    }
+    case "not_found":
+      return `There is no handoff with id ${id ?? "(none)"}. Check the id with \`handoff_list\`.`;
+    case "not_addressed_to_you":
+    case "not_permitted": {
+      const to = typeof err.to === "string" ? err.to : null;
+      return `${id ?? "That handoff"} is not yours to claim: its \`to\` field names ${to ?? "another agent"}, and only that agent (or \`any\`, or a human) may claim it. You are ${agent.name}.`;
+    }
+    case "invalid_transition":
+      return `${id ?? "That handoff"} can't be claimed: ${err.message}. Only open handoffs can be claimed.`;
+    default:
+      return null;
+  }
+}
+
+/** `/pickup`: claims server-side (rendering has a side effect) and returns the brief plus the submit call. */
+export function registerPickupPrompt(server: McpServer, deps: { paths: RepoPaths; agent: AgentRef; service: HandoffService }): void {
+  const { paths, agent, service } = deps;
+  server.registerPrompt(
+    "pickup",
+    {
+      title: "Pick up",
+      description: "Claim the next handoff addressed to you (or the one you already hold) and get its brief",
+      argsSchema: ArgsSchema,
+    },
+    (args) =>
+      promptSafely("pickup prompt", () => {
+        const { id, rest } = parseTokens([args.id]);
+        if (id === undefined && rest !== "") {
+          return promptResult("Pick up", `\`${rest}\` is not a handoff id (ids start with \`h_\`). Run /pickup with no id to take the next one.`);
+        }
+        let h: Handoff;
+        let lead: string;
+        const held = id === undefined ? heldBy(service, agent) : null;
+        if (held !== null) {
+          h = unwrap(service.get(held)).handoff;
+          lead = `You already hold ${h.id} (${h.status}); finish it before taking another.`;
+        } else {
+          const r = service.claim(id);
+          if (!r.ok) {
+            const text = refusal(r.error, id, agent);
+            if (text === null) throw serviceProtocolError(r.error);
+            return promptResult("Pick up", text);
+          }
+          h = r.value;
+          lead = `You claimed ${h.id}. Your lease runs until ${h.claim?.leaseUntil ?? "(unknown)"}.`;
+        }
+        const leaseMinutes = loadConfig(paths).leaseMinutes;
+        const text = workText(h, renderBrief(h, service.history(h.id)), leaseMinutes, lead);
+        return promptResult(`Work on ${h.id}`, text);
+      }),
+  );
+}
