@@ -15,6 +15,7 @@ import {
   RECENT_UPDATED_AT,
   insertHandoffRow,
   pruneNowEnv,
+  seedOldDoneWithLogAndLeftoverPruning,
   seedOldDoneWithTwoLogs,
   touchMtime,
   withPruneClock,
@@ -392,6 +393,77 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
       await client.close();
       await server.close();
       handle.close();
+    } finally {
+      repo.cleanup();
+    }
+  });
+});
+
+describe("handoffs prune (plan criterion 25)", () => {
+  function expectCriterion25Prune(opts: {
+    repoDir: string;
+    handle: ReturnType<typeof seedOldDoneWithLogAndLeftoverPruning>["handle"];
+    id: string;
+    relPaths: string[];
+    logContent: string;
+    leftoverContent: string;
+    exitCode: number;
+    stderr: string;
+  }) {
+    expect(opts.exitCode).toBe(0);
+    expect(opts.stderr).toBe("");
+    for (const rel of opts.relPaths) {
+      expect(fs.existsSync(path.join(opts.repoDir, rel))).toBe(false);
+    }
+    expect(fs.existsSync(path.join(opts.repoDir, ".handoffs/runs", opts.id))).toBe(false);
+    const events = logsPrunedEvents(opts.handle.repo, opts.id);
+    expect(events).toHaveLength(1);
+    const data = events[0]?.data as { paths?: string[]; bytes?: number };
+    expect(data.paths?.sort()).toEqual(opts.relPaths.sort());
+    expect(data.bytes).toBe(
+      Buffer.byteLength(opts.logContent, "utf8") + Buffer.byteLength(opts.leftoverContent, "utf8"),
+    );
+  }
+
+  test("t-c25: x.log and x.log.pruning pruned via CLI with one logs_pruned event", async () => {
+    const repo = tmpRepo();
+    try {
+      const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
+      const { code, err } = await runPrune(repo.dir, []);
+      expectCriterion25Prune({
+        repoDir: repo.dir,
+        handle: setup.handle,
+        id: setup.id,
+        relPaths: setup.relPaths,
+        logContent: setup.logContent,
+        leftoverContent: setup.leftoverContent,
+        exitCode: code,
+        stderr: err,
+      });
+      setup.handle.close();
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("t-c25: x.log and x.log.pruning pruned via service.prune()", () => {
+    const repo = tmpRepo();
+    try {
+      const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
+      const result = setup.handle.service.prune({ olderThanDays: 30, dryRun: false });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expectCriterion25Prune({
+        repoDir: repo.dir,
+        handle: setup.handle,
+        id: setup.id,
+        relPaths: setup.relPaths,
+        logContent: setup.logContent,
+        leftoverContent: setup.leftoverContent,
+        exitCode: 0,
+        stderr: "",
+      });
+      setup.handle.close();
     } finally {
       repo.cleanup();
     }

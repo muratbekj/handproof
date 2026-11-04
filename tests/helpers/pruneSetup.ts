@@ -96,6 +96,28 @@ export function insertHandoffRow(
   return h.id;
 }
 
+export function seedOldDoneWithLogAndLeftoverPruning(repo: TmpRepo): {
+  handle: ServiceHandle;
+  id: string;
+  relPaths: string[];
+  logContent: string;
+  leftoverContent: string;
+} {
+  return withPruneClock((now) => {
+    const paths = initRepoHandoffs(repo);
+    const handle = openTestService(repo, { name: "human-cli", harness: "other" }, now);
+    const id = insertHandoffRow(handle.repo, "done", OLD_UPDATED_AT, "Done handoff with leftover .pruning");
+    const dir = path.join(paths.runsDir, id);
+    fs.mkdirSync(dir, { recursive: true });
+    const logContent = "original check log\n";
+    const leftoverContent = "leftover from interrupted prune\n";
+    fs.writeFileSync(path.join(dir, "x.log"), logContent);
+    fs.writeFileSync(path.join(dir, "x.log.pruning"), leftoverContent);
+    const relPaths = [`.handoffs/runs/${id}/x.log`, `.handoffs/runs/${id}/x.log.pruning`];
+    return { handle, id, relPaths, logContent, leftoverContent };
+  });
+}
+
 export function seedOldDoneWithTwoLogs(repo: TmpRepo): {
   handle: ServiceHandle;
   id: string;
