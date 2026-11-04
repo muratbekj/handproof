@@ -30,9 +30,11 @@ export function openDb(dbPath: string, opts?: { migrations?: readonly Migration[
 
 const BUSY_WAIT_MS = 5000;
 
-function isBusy(err: unknown): boolean {
-  const code = (err as { code?: unknown } | null)?.code;
-  return code === "SQLITE_BUSY" || code === "SQLITE_LOCKED";
+/** SQLITE_BUSY* (including SQLITE_BUSY_SNAPSHOT, errno 517) or SQLITE_LOCKED: the caller may retry. */
+export function isBusy(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" && (code.startsWith("SQLITE_BUSY") || code === "SQLITE_LOCKED");
 }
 
 /**
