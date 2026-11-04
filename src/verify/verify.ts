@@ -42,7 +42,8 @@ function scopeResult(h: Handoff, paths: RepoPaths): Verification["scope"] {
       violations: checkScope(changed.files, h.scope, h.kind),
     };
   } catch (err) {
-    if (!isHandoffsError(err)) throw err;
+    // Only a missing base is a scope verdict; any other failure (git missing, diff failed) aborts the run.
+    if (!isHandoffsError(err) || err.code !== "scope_base_unavailable") throw err;
     return { base: null, usedMergeBase: false, files: [], violations: [], error: `${err.code}: ${err.message}` };
   }
 }
