@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
+    "picomatch": "4.0.7",
     "ulid": "3.0.2",
     "zod": "4.6.7"
   },
@@ -29,6 +30,7 @@
     "@eslint/js": "10.0.1",
     "@modelcontextprotocol/client": "2.4.0",
     "@types/bun": "1.4.4",
+    "@types/picomatch": "4.0.3",
     "eslint": "10.14.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1"

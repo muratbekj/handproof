@@ -27,3 +27,14 @@ export function safely(name: string, fn: () => CallToolResult): CallToolResult {
     return toolErr({ error: "internal_error", message: `${name} failed unexpectedly: ${message}` });
   }
 }
+
+/** Async `safely`, for handlers that run verification. */
+export async function safelyAsync(name: string, fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
+  try {
+    return await fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`handoffs: ${name} failed: ${err instanceof Error ? (err.stack ?? message) : message}`);
+    return toolErr({ error: "internal_error", message: `${name} failed unexpectedly: ${message}` });
+  }
+}

@@ -18,6 +18,8 @@ commands:
              --all                 include done and cancelled
              --status <s>[,<s>]    only these statuses
   show <id>  print the markdown brief for one handoff
+  review <id> accept|reject [reason...]
+             accept a verified handoff (done) or reject it (reopened); reject needs a reason
 
 options:
   -h, --help     show this help
@@ -146,6 +148,18 @@ function cmdShow(id: string, env: NodeJS.ProcessEnv, cwd: string): number {
   });
 }
 
+function cmdReview(args: string[], env: NodeJS.ProcessEnv, cwd: string): number | null {
+  const [id, decision, ...words] = args;
+  if (id === undefined || (decision !== "accept" && decision !== "reject")) return null;
+  const reason = words.length === 0 ? undefined : words.join(" ");
+  return withService(env, cwd, (service) => {
+    const r = service.review(id, decision, reason);
+    if (!r.ok) return serviceFailure(r.error);
+    process.stdout.write(`${r.value.id} ${r.value.status}\n`);
+    return 0;
+  });
+}
+
 /** CLI entry. Returns the process exit code; never calls process.exit itself. */
 export async function main(argv: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
   const [cmd, ...rest] = argv;
@@ -159,6 +173,11 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, cwd: string):
         return await cmdServe(env, cwd);
       case "ls": {
         const code = cmdLs(rest, env, cwd);
+        if (code === null) break;
+        return code;
+      }
+      case "review": {
+        const code = cmdReview(rest, env, cwd);
         if (code === null) break;
         return code;
       }

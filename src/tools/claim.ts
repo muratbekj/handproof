@@ -23,11 +23,10 @@ export function registerClaim(server: McpServer, service: HandoffService): void 
       safely("handoff_claim", () => {
         const args = parseArgs(ClaimArgs, raw);
         if (!args.ok) return toolErr(args.error);
-        return fromResult(service.claim(args.value.id), (handoff) => {
-          const full = service.get(handoff.id);
-          const events = full.ok ? full.value.events : [];
-          return { handoff, markdown: renderBrief(handoff, events) };
-        });
+        return fromResult(service.claim(args.value.id), (handoff) => ({
+          handoff,
+          markdown: renderBrief(handoff, service.history(handoff.id)),
+        }));
       }),
   );
 }

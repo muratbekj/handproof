@@ -43,6 +43,7 @@ export const TRANSITIONS: readonly Transition[] = Object.freeze([
   row("changes_requested", "expire", "open", ["system"]),
   row("submitted", "verify_pass", "verified", ["system"]),
   row("submitted", "verify_fail", "changes_requested", ["system"]),
+  row("submitted", "expire", "changes_requested", ["system"]), // verification interrupted (deadline passed)
   row("verified", "accept", "done", ["creator", "human"]),
   row("verified", "reject", "open", ["creator", "human"]),
 ]);

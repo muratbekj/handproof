@@ -1,10 +1,10 @@
 import { loadConfig, resolveAgent, resolveRepo } from "../../src/config";
 import { openService } from "../../src/service/open";
 
-const [repoPath, agentName, handoffId] = Bun.argv.slice(2);
+const [repoPath, agentName, handoffIdArg] = Bun.argv.slice(2);
 
-if (repoPath === undefined || agentName === undefined || handoffId === undefined) {
-  throw new Error("usage: claimWorker.ts <repoPath> <agentName> <handoffId>");
+if (repoPath === undefined || agentName === undefined || handoffIdArg === undefined) {
+  throw new Error("usage: claimWorker.ts <repoPath> <agentName> <handoffId|->");
 }
 
 const harness = agentName.includes("cursor") ? "cursor" : "claude-code";
@@ -39,7 +39,7 @@ await new Promise<void>((resolve) => {
   process.on("message", onMessage);
 });
 
-const result = handle.service.claim(handoffId);
+const result = handoffIdArg === "-" ? handle.service.claim() : handle.service.claim(handoffIdArg);
 if (result.ok) {
   ipcSend({
     ok: true,

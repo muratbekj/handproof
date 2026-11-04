@@ -109,6 +109,58 @@ describe("HandoffRepo", () => {
     });
   });
 
+  test("appendEvent adds an event without changing status or updated_at", () => {
+    withRepo((repo) => {
+      const handoff = fixtureHandoff();
+      repo.insert(handoff, createdEvent(T0));
+      const before = repo.get(handoff.id);
+      expect(before).not.toBeNull();
+      if (!before) return;
+
+      repo.appendEvent(handoff.id, {
+        at: T1,
+        actor: "cursor-impl",
+        type: "verification",
+        data: { note: "dry run" },
+      });
+
+      const after = repo.get(handoff.id);
+      expect(after?.status).toBe(before.status);
+      expect(after?.updatedAt).toBe(before.updatedAt);
+      expect(repo.events(handoff.id).map((e) => e.type)).toEqual(["created", "verification"]);
+    });
+  });
+
+  test("expireVerifications moves submitted rows past deadline to changes_requested", () => {
+    withRepo((repo) => {
+      const handoff = fixtureHandoff({
+        status: "open",
+        claim: null,
+      });
+      repo.insert(handoff, createdEvent(T0));
+      const claim = {
+        by: { name: "cursor-impl", harness: "cursor" as const },
+        leaseUntil: "2026-11-03T12:00:30.000Z",
+      };
+      expect(repo.tryClaim(handoff.id, claim.by, claim.leaseUntil, T0)).toBe(true);
+      repo.transitionState(
+        handoff.id,
+        { status: "claimed", claimBy: "cursor-impl" },
+        { status: "submitted", claim, updatedAt: T0 },
+        { at: T0, actor: "cursor-impl", type: "submitted", data: {} },
+      );
+
+      const newLease = "2026-11-03T12:30:00.000Z";
+      const ids = repo.expireVerifications("2026-11-03T12:01:00.000Z", newLease);
+      expect(ids).toEqual([handoff.id]);
+      const row = repo.get(handoff.id);
+      expect(row?.status).toBe("changes_requested");
+      expect(row?.claim?.leaseUntil).toBe(newLease);
+      const ev = repo.events(handoff.id).find((e) => e.type === "verification_interrupted");
+      expect(ev?.actor).toBe("system");
+    });
+  });
+
   test("expireLeases reopens expired rows and records lease_expired events", () => {
     withRepo((repo) => {
       const handoff = fixtureHandoff();
