@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync, renameSync, rmdirSync, unlinkSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, renameSync, rmdirSync, unlinkSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { RepoPaths } from "../config.ts";
 import type { AgentRef } from "../schema/handoff.ts";
@@ -36,7 +36,8 @@ export interface PruneDeps {
 
 export const DEFAULT_PRUNE_DAYS = 30;
 const DAY_MS = 86_400_000;
-const STAGED_SUFFIX = ".pruning";
+/** Prefix of the fresh staging directory created inside a run dir while its files are pruned. */
+const STAGING_PREFIX = ".prune-staging-";
 const TERMINAL = new Set(["done", "cancelled"]);
 
 /** `<N>d` with N a non-negative integer → N; anything else → null. */
@@ -118,12 +119,15 @@ export function pruneLogs(deps: PruneDeps, opts: PruneOptions): PruneReport {
       if (h === null) {
         for (const f of files) unlinkSync(f.abs);
       } else {
-        // Stage by rename so a failed event append can put the files back.
-        const staged: string[] = [];
+        // Stage by rename into a fresh directory (names can't collide with anything there), so a
+        // failed event append can put every file back under its original name.
+        const stage = mkdtempSync(join(dir, STAGING_PREFIX));
+        const staged: { from: string; to: string }[] = [];
         try {
           for (const f of files) {
-            renameSync(f.abs, f.abs + STAGED_SUFFIX);
-            staged.push(f.abs);
+            const to = join(stage, f.name);
+            renameSync(f.abs, to);
+            staged.push({ from: f.abs, to });
           }
           repo.appendEvent(h.id, {
             at: at.toISOString(),
@@ -132,16 +136,18 @@ export function pruneLogs(deps: PruneDeps, opts: PruneOptions): PruneReport {
             data: { paths: pruned.map((p) => p.path), bytes },
           });
         } catch (err) {
-          for (const abs of staged) {
+          for (const s of staged) {
             try {
-              renameSync(abs + STAGED_SUFFIX, abs);
+              renameSync(s.to, s.from);
             } catch {
-              // Best effort; a leftover staged file is pruned on the next run.
+              // Best effort: a file that can't be moved back stays in the staging directory.
             }
           }
+          removeIfEmpty(stage);
           throw err;
         }
-        for (const abs of staged) unlinkSync(abs + STAGED_SUFFIX);
+        for (const s of staged) unlinkSync(s.to);
+        rmdirSync(stage);
       }
       removeIfEmpty(dir);
     }
