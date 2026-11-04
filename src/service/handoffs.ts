@@ -9,6 +9,7 @@ import { parseHandoffInput } from "../schema/rules.ts";
 import { isBusy } from "../store/db.ts";
 import type { HandoffEvent, HandoffRepo, NewEvent, StatePatch } from "../store/repo.ts";
 import { transition } from "./lifecycle.ts";
+import { type PruneOptions, type PruneReport, pruneLogs } from "./prune.ts";
 import { rolesFor } from "./roles.ts";
 import { snapshotDirty } from "../verify/scope.ts";
 import { scanSecrets, secretError } from "../verify/secrets.ts";
@@ -88,6 +89,14 @@ export interface HandoffService {
   review(id: string, decision: ReviewDecision, reason?: string): Result<Handoff>;
 }
 
+/** CLI-only operations (no MCP tool exposes them); `createHandoffService` returns both. */
+export interface HandoffAdmin {
+  /** Lease/verification expiry (no renewal), then each id's status; not_found for an unknown id. */
+  statuses(ids: string[]): Result<Record<string, Status>>;
+  /** Deletes old check logs of done/cancelled handoffs (see prune.ts). */
+  prune(opts: PruneOptions): Result<PruneReport>;
+}
+
 export function toSummary(h: Handoff): HandoffSummary {
   return {
     id: h.id,
@@ -152,7 +161,7 @@ function scanCreateInput(raw: unknown) {
   return SCANNED_CREATE_FIELDS.flatMap((f) => scanSecrets(rec[f], [f]));
 }
 
-export function createHandoffService(deps: ServiceDeps): HandoffService {
+export function createHandoffService(deps: ServiceDeps): HandoffService & HandoffAdmin {
   const { repo, config, paths, agent, git } = deps;
   const leaseMs = config.leaseMinutes * 60_000;
 
@@ -166,6 +175,13 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     repo.expireVerifications(at, leaseFrom(at));
     repo.renewLeases(agent.name, leaseFrom(at), at);
     return at;
+  };
+
+  /** Expiry only: a reader (wait) must not renew its own leases. */
+  const expire = (): void => {
+    const at = nowIso();
+    repo.expireLeases(at);
+    repo.expireVerifications(at, leaseFrom(at));
   };
 
   /** Busy and coded errors become a failed Result; anything else is rethrown. */
@@ -458,6 +474,29 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
 
     history(id) {
       return repo.events(id);
+    },
+
+    statuses(ids) {
+      try {
+        expire();
+        const out: Record<string, Status> = {};
+        for (const id of ids) {
+          const h = repo.get(id);
+          if (h === null) return fail(notFound(id));
+          out[id] = h.status;
+        }
+        return ok(out);
+      } catch (err) {
+        return caught(err);
+      }
+    },
+
+    prune(opts) {
+      try {
+        return ok(pruneLogs({ repo, paths, now: deps.now, agent }, opts));
+      } catch (err) {
+        return caught(err);
+      }
     },
 
     submit(id, raw) {

@@ -50,7 +50,14 @@ function acceptanceItem(a: Handoff["acceptance"][number]): string {
 }
 
 function timelineItem(e: HandoffEvent): string {
-  const detail = typeof e.data.note === "string" ? e.data.note : typeof e.data.reason === "string" ? e.data.reason : null;
+  const detail =
+    e.type === "logs_pruned"
+      ? `${Array.isArray(e.data.paths) ? e.data.paths.length : 0} files`
+      : typeof e.data.note === "string"
+        ? e.data.note
+        : typeof e.data.reason === "string"
+          ? e.data.reason
+          : null;
   return `- ${e.at} **${esc(e.actor)}** ${e.type}${detail === null ? "" : `: ${esc(detail)}`}`;
 }
 
@@ -72,6 +79,16 @@ function latestVerification(events: HandoffEvent[]): Verification | null {
   return null;
 }
 
+/** Log paths listed in this handoff's `logs_pruned` events. */
+function prunedPaths(events: HandoffEvent[]): Set<string> {
+  const out = new Set<string>();
+  for (const e of events) {
+    if (e.type !== "logs_pruned" || !Array.isArray(e.data.paths)) continue;
+    for (const p of e.data.paths) if (typeof p === "string") out.add(p);
+  }
+  return out;
+}
+
 /** Verifications stored by Phase 2 have no `scope.ignored`. */
 function ignoredOf(v: Verification): string[] {
   const ignored: unknown = (v.scope as { ignored?: unknown }).ignored;
@@ -83,7 +100,7 @@ function yesNo(b: boolean): string {
 }
 
 /** Server-produced summary of the latest verification. Names and paths only, never command output. */
-function verificationBody(v: Verification | null): string {
+function verificationBody(v: Verification | null, pruned: ReadonlySet<string>): string {
   if (v === null) return "_not verified yet_";
   const lines = [`**Passed:** ${yesNo(v.passed)} · ${v.at} · by ${esc(v.by)}`, ""];
   if (v.checks.length === 0) {
@@ -92,7 +109,7 @@ function verificationBody(v: Verification | null): string {
     lines.push("| check | passed | exit | timed out | log |", "| --- | --- | --- | --- | --- |");
     for (const c of v.checks) {
       const exit = c.error ?? (c.exitCode === null ? (c.signal ?? "—") : String(c.exitCode));
-      const log = c.logPath === null ? "—" : code(c.logPath);
+      const log = c.logPath === null ? "—" : pruned.has(c.logPath) ? "log pruned" : code(c.logPath);
       lines.push(`| ${cell(c.name)} | ${yesNo(c.passed)} | ${cell(exit)} | ${yesNo(c.timedOut)} | ${log} |`);
     }
   }
@@ -144,7 +161,7 @@ export function renderBrief(h: Handoff, events: HandoffEvent[]): string {
     `# ${esc(h.title)}`,
     `${meta}\n${repoLine}`,
     wrapUntrusted(h.id, data.join("\n\n")),
-    section("Verification", verificationBody(latestVerification(events))),
+    section("Verification", verificationBody(latestVerification(events), prunedPaths(events))),
     section("Timeline", timeline),
   ].join("\n\n");
 }

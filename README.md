@@ -141,9 +141,20 @@ handoffs-mcp serve                              # run the MCP server over stdio
 handoffs ls [--all] [--status open,claimed]     # table of handoffs
 handoffs show <id>                              # markdown brief
 handoffs review <id> accept|reject [reason...]  # accept or reject a verified handoff
+handoffs prune [--older-than 30d] [--dry-run]   # delete old check logs of done/cancelled handoffs
+handoffs wait <id>... [--until verified,changes_requested] [--timeout 30m]
+                                                # block until a status changes (or reaches --until)
 ```
 
 `handoffs` and `handoffs-mcp` are the same binary.
+
+`handoffs prune` deletes the check log files under `.handoffs/runs/<id>/` of handoffs that are `done` or `cancelled` and finished at least 30 days ago (`--older-than <N>d` changes that; `0d` prunes all of them). `--dry-run` lists what would be deleted and deletes nothing. Each pruned handoff gets a `logs_pruned` event, and its brief shows `log pruned` instead of the log path. Run directories without a handoff (e.g. after deleting the database) are removed once all their files are older than the cutoff. Handoff rows and events are never deleted.
+
+`handoffs wait` polls the database once a second (no tokens spent while it waits) and prints `<id> <status>` for each handoff that met the condition. Without `--until` it returns when any given handoff's status differs from its status at start; with `--until <s>[,<s>]` it returns when one is in that set (immediately if one already is). Each poll first expires lapsed leases, so a crashed claimant doesn't leave it hanging. `--timeout <N>s|<N>m|<N>h` gives up after that long: every id is printed with `(timeout)` and the exit code is 124. Ctrl-C exits with 130.
+
+### Disk usage
+
+Check logs grow with every verification run, up to 1 MiB per check run, under `.handoffs/runs/`. Use `handoffs prune` to remove old ones (default: older than 30 days). The database stays small and is never pruned.
 
 ## Security
 
