@@ -20,8 +20,13 @@ import {
   withPruneClock,
   writeRunLogs,
 } from "./helpers/pruneSetup";
-import { testEnv } from "./helpers/env";
 import { tmpRepo } from "./helpers/tmpRepo";
+import {
+  criteriaFor,
+  implementHandoffInput,
+  initPhase2Repo,
+  withPhase2Clock,
+} from "./helpers/phase2Setup";
 
 const MCP_TOOL_NAMES = [
   "handoff_cancel",
@@ -82,7 +87,7 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
       });
       const { code, out } = await runPrune(repo.dir, []);
       expect(code).toBe(0);
-      expect(out).toMatch(/pruned 1 files/);
+      expect(out).toMatch(/pruned 1 file /);
       expect(out).toContain("from 1 handoff");
     } finally {
       repo.cleanup();
@@ -271,38 +276,102 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
   });
 
   test("t-ac11: brief shows log pruned and timeline entry", async () => {
-    const repo = tmpRepo();
-    try {
-      const { handle, id, relPaths } = seedOldDoneWithTwoLogs(repo);
-      await runPrune(repo.dir, []);
-      const got = handle.service.get(id);
-      expect(got.ok).toBe(true);
-      if (!got.ok) return;
-      const brief = renderBrief(got.value.handoff, got.value.events);
-      expect(brief).toContain("log pruned");
-      for (const rel of relPaths) {
-        expect(brief).toContain(rel.split("/").pop() ?? rel);
-      }
-      expect(brief).toContain("logs_pruned: 2 files");
+    const SUMMARY =
+      "Implemented auth ok marker file under src/auth and kept edits inside the allowed scope.";
+    await withPhase2Clock(async (now) => {
+      const repo = tmpRepo();
+      try {
+        initPhase2Repo(repo);
+        const input = implementHandoffInput([
+          { id: "ac1", description: "Ok file check for prune brief.", check: "okfile" },
+          { id: "ac2", description: "Pass check for second log path.", check: "pass" },
+        ]);
+        const planner = openTestService(repo, AGENTS.planner, now);
+        const created = planner.service.create(input);
+        expect(created.ok).toBe(true);
+        if (!created.ok) return;
+        const id = created.value.handoff.id;
+        planner.close();
 
-      withPruneClock((now) => {
-        const paths = initRepoHandoffs(repo);
-        const other = openTestService(repo, AGENTS.planner, now);
-        const freshId = insertHandoffRow(other.repo, "done", RECENT_UPDATED_AT, "Still has paths");
-        const { relPaths: freshLogs } = writeRunLogs(paths.runsDir, freshId, ["keep.log"]);
-        const freshGot = other.service.get(freshId);
+        const worker = openTestService(repo, AGENTS.cursorImpl, now);
+        expect(worker.service.claim(id).ok).toBe(true);
+        fs.mkdirSync(path.join(repo.dir, "src", "auth"), { recursive: true });
+        fs.writeFileSync(path.join(repo.dir, "src", "auth", "ok.txt"), "ok\n");
+        const submitted = await worker.service.submit(id, {
+          summary: SUMMARY,
+          criteria: criteriaFor(["ac1", "ac2"]),
+        });
+        expect(submitted.ok).toBe(true);
+        if (!submitted.ok) return;
+        const logPaths = submitted.value.verification.checks
+          .map((c) => c.logPath)
+          .filter((p): p is string => p !== null);
+        expect(logPaths.length).toBe(2);
+
+        const lead = openTestService(repo, AGENTS.planner, now);
+        expect(lead.service.review(id, "accept").ok).toBe(true);
+        const doneRow = lead.repo.get(id);
+        expect(doneRow?.status).toBe("done");
+        if (doneRow === null) return;
+        lead.repo.transitionState(
+          id,
+          { status: "done" },
+          { status: "done", claim: null, updatedAt: OLD_UPDATED_AT, doc: doneRow },
+          { at: now().toISOString(), actor: "planner", type: "updated", data: {} },
+        );
+        lead.close();
+        worker.close();
+
+        await runPrune(repo.dir, []);
+
+        const reader = openTestService(repo, AGENTS.planner, () => PRUNE_NOW);
+        const got = reader.service.get(id);
+        expect(got.ok).toBe(true);
+        if (!got.ok) return;
+        const brief = renderBrief(got.value.handoff, got.value.events);
+        expect(brief).toContain("log pruned");
+        expect(brief).toContain("logs_pruned: 2 files");
+        for (const p of logPaths) {
+          expect(fs.existsSync(path.join(repo.dir, p))).toBe(false);
+        }
+
+        const freshPlanner = openTestService(repo, AGENTS.planner, now);
+        const freshInput = implementHandoffInput([
+          { id: "ac1", description: "Ok file for unp runed brief.", check: "okfile" },
+        ]);
+        const freshCreated = freshPlanner.service.create(freshInput);
+        expect(freshCreated.ok).toBe(true);
+        if (!freshCreated.ok) return;
+        const freshId = freshCreated.value.handoff.id;
+        freshPlanner.close();
+        const freshWorker = openTestService(repo, AGENTS.cursorImpl, now);
+        expect(freshWorker.service.claim(freshId).ok).toBe(true);
+        fs.mkdirSync(path.join(repo.dir, "src", "auth"), { recursive: true });
+        fs.writeFileSync(path.join(repo.dir, "src/auth/ok.txt"), "ok\n");
+        const freshSub = await freshWorker.service.submit(freshId, {
+          summary: SUMMARY,
+          criteria: criteriaFor(["ac1"]),
+        });
+        expect(freshSub.ok).toBe(true);
+        if (!freshSub.ok) return;
+        const freshLead = openTestService(repo, AGENTS.planner, now);
+        expect(freshLead.service.review(freshId, "accept").ok).toBe(true);
+        const freshLog = freshSub.value.verification.checks[0]?.logPath;
+        expect(freshLog).toBeTruthy();
+        const freshGot = freshLead.service.get(freshId);
         expect(freshGot.ok).toBe(true);
-        if (freshGot.ok) {
+        if (freshGot.ok && freshLog) {
           const freshBrief = renderBrief(freshGot.value.handoff, freshGot.value.events);
-          expect(freshBrief).toContain(freshLogs[0] ?? "");
+          expect(freshBrief).toContain(freshLog);
           expect(freshBrief).not.toContain("log pruned");
         }
-        other.close();
-      });
-      handle.close();
-    } finally {
-      repo.cleanup();
-    }
+        freshLead.close();
+        freshWorker.close();
+        reader.close();
+      } finally {
+        repo.cleanup();
+      }
+    });
   });
 
   test("t-ac12: MCP listTools names unchanged (no prune tool)", async () => {
