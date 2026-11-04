@@ -17,6 +17,7 @@ import {
   pruneNowEnv,
   seedOldDoneWithLogAndLeftoverPruning,
   seedOldDoneWithTwoLogs,
+  stubAppendEventFailOnLogsPruned,
   touchMtime,
   withPruneClock,
   writeRunLogs,
@@ -463,6 +464,33 @@ describe("handoffs prune (plan criterion 25)", () => {
         exitCode: 0,
         stderr: "",
       });
+      setup.handle.close();
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  test("t-c25: restores x.log and x.log.pruning when logs_pruned append fails", () => {
+    const repo = tmpRepo();
+    try {
+      const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
+      const xLog = path.join(repo.dir, setup.relPaths[0] ?? "");
+      const xLeftover = path.join(repo.dir, setup.relPaths[1] ?? "");
+      const unstub = stubAppendEventFailOnLogsPruned(setup.handle.repo);
+      let failed = false;
+      try {
+        setup.handle.service.prune({ olderThanDays: 30, dryRun: false });
+      } catch (err) {
+        failed = true;
+        expect(String(err)).toMatch(/simulated logs_pruned append failure/);
+      } finally {
+        unstub();
+      }
+      expect(failed).toBe(true);
+
+      expect(fs.readFileSync(xLog, "utf8")).toBe(setup.logContent);
+      expect(fs.readFileSync(xLeftover, "utf8")).toBe(setup.leftoverContent);
+      expect(logsPrunedEvents(setup.handle.repo, setup.id)).toHaveLength(0);
       setup.handle.close();
     } finally {
       repo.cleanup();
