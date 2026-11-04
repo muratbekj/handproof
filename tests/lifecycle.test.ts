@@ -72,6 +72,12 @@ const TABLE: readonly ExpectedTransition[] = [
     to: "changes_requested",
     who: ["system"],
   },
+  {
+    from: "submitted",
+    action: "expire",
+    to: "changes_requested",
+    who: ["system"],
+  },
   { from: "verified", action: "accept", to: "done", who: ["creator", "human"] },
   { from: "verified", action: "reject", to: "open", who: ["creator", "human"] },
 ];

@@ -23,6 +23,9 @@ const TOOL_NAMES = [
   "handoff_update",
   "handoff_release",
   "handoff_cancel",
+  "handoff_submit",
+  "handoff_verify",
+  "handoff_review",
 ] as const;
 
 async function withLinkedClients(
@@ -87,7 +90,7 @@ function resourceText(contents: { uri: string; text?: string; blob?: string }[])
 }
 
 describe("MCP tools and resources", () => {
-  test("listTools exposes seven handoff tools with create schema constraints", async () => {
+  test("listTools exposes ten handoff tools with create schema constraints", async () => {
     const repo = tmpRepo();
     try {
       await withLinkedClients(repo, [AGENTS.planner, AGENTS.cursorImpl], async ({ planner }) => {
@@ -237,7 +240,7 @@ describe("MCP tools and resources", () => {
     }
   });
 
-  test("stdio serve emits no stderr and advertises seven tools", async () => {
+  test("stdio serve emits no stderr and advertises ten tools", async () => {
     const repo = tmpRepo();
     try {
       initRepoHandoffs(repo);
@@ -265,7 +268,7 @@ describe("MCP tools and resources", () => {
       const client = new Client({ name: "stdio-test", version: "0.0.1" });
       await client.connect(transport);
       const tools = await client.listTools();
-      expect(tools.tools).toHaveLength(7);
+      expect(tools.tools).toHaveLength(10);
       await client.close();
 
       expect(stderrChunks.join("")).toBe("");
