@@ -15,7 +15,10 @@ import { registerCreate } from "./tools/create.ts";
 import { registerGet } from "./tools/get.ts";
 import { registerList } from "./tools/list.ts";
 import { registerRelease } from "./tools/release.ts";
+import { registerReview } from "./tools/review.ts";
+import { registerSubmit } from "./tools/submit.ts";
 import { registerUpdate } from "./tools/update.ts";
+import { registerVerify } from "./tools/verify.ts";
 import { VERSION } from "./version.ts";
 
 export interface ServerDeps {
@@ -37,7 +40,7 @@ function resourceError(err: ServiceError, uri: string): Error {
 }
 
 /**
- * Builds the MCP server: seven handoff tools, the inbox resource and one resource per handoff.
+ * Builds the MCP server: ten handoff tools, the inbox resource and one resource per handoff.
  * Never write to stdout from server code: it carries the JSON-RPC stream. Log with console.error.
  */
 export function createServer(deps: ServerDeps): McpServer {
@@ -51,6 +54,9 @@ export function createServer(deps: ServerDeps): McpServer {
   registerUpdate(server, service);
   registerRelease(server, service);
   registerCancel(server, service);
+  registerSubmit(server, service);
+  registerVerify(server, service);
+  registerReview(server, service);
 
   server.registerResource(
     "handoff",
