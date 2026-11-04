@@ -266,6 +266,43 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
     }
   });
 
+  test("t-ac20: CLI handoffs wait --timeout 1s exits 124", async () => {
+    const repo = tmpRepo();
+    try {
+      initPhase2Repo(repo);
+      const planner = openTestService(repo, AGENTS.planner);
+      const created = planner.service.create(validFixture);
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const id = created.value.handoff.id;
+      planner.close();
+
+      const worker = openTestService(repo, AGENTS.cursorImpl);
+      expect(worker.service.claim(id).ok).toBe(true);
+      worker.close();
+
+      const env = testEnv({
+        HANDOFFS_REPO: repo.dir,
+        HANDOFFS_AGENT: "human-cli",
+        HANDOFFS_HARNESS: "other",
+      });
+
+      const proc = Bun.spawn(["bun", BIN, "wait", id, "--timeout", "1s"], {
+        cwd: repo.dir,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const code = await proc.exited;
+      const out = await proc.stdout.text();
+      expect(code).toBe(124);
+      expect(out.trim()).toBe(`${id} claimed (timeout)`);
+    } finally {
+      repo.cleanup();
+    }
+  }, { timeout: 5000 });
+
   test("t-ac21: bad wait CLI args and unknown id", async () => {
     const repo = tmpRepo();
     try {
