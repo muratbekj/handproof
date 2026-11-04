@@ -36,9 +36,7 @@ export function promptResult(description: string, text: string): GetPromptResult
 }
 
 /** A tool call the agent should make, as the fenced block it copies: `name {json}`. */
-export function toolCallBlock(tool: string, args: Record<string, unknown>): string {
-  return `\`\`\`json\n${tool} ${JSON.stringify(args)}\n\`\`\``;
-}
+export { toolCallBlock } from "../render/work.ts";
 
 /** Runs a prompt callback; anything thrown reaches the client as a JSON-RPC error (see rpc-error.ts). */
 export function promptSafely(name: string, fn: () => GetPromptResult): GetPromptResult {

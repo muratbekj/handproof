@@ -5,7 +5,8 @@ import { renderBrief } from "../render/markdown.ts";
 import type { AgentRef, Handoff } from "../schema/handoff.ts";
 import type { HandoffService, Result, ServiceError } from "../service/handoffs.ts";
 import { serviceProtocolError } from "../rpc-error.ts";
-import { parseTokens, promptResult, promptSafely, toolCallBlock } from "./args.ts";
+import { workRules } from "../render/work.ts";
+import { parseTokens, promptResult, promptSafely } from "./args.ts";
 
 const ArgsSchema = z.object({
   id: z.string().optional().describe("handoff id (h_…) to claim; leave empty to take the next one addressed to you"),
@@ -26,36 +27,8 @@ function heldBy(service: HandoffService, agent: AgentRef): string | null {
   return held[0]?.id ?? null;
 }
 
-function submitBlock(h: Handoff): string {
-  return toolCallBlock("handoff_submit", {
-    id: h.id,
-    summary: "<what you changed and why>",
-    commits: ["<sha>"],
-    criteria: h.acceptance.map((a) => ({ id: a.id, met: true, note: "<how you know>" })),
-  });
-}
-
 function workText(h: Handoff, brief: string, leaseMinutes: number, lead: string): string {
-  const every = Math.max(1, Math.floor(leaseMinutes / 2));
-  const checks = [...new Set(h.acceptance.flatMap((a) => (a.check === undefined ? [] : [a.check])))];
-  const checkRule =
-    checks.length === 0
-      ? "- No acceptance item names a check; report each criterion honestly in the submit call."
-      : `- Before submitting, run the named checks locally (${checks.map((c) => `\`${c}\``).join(", ")}; commands are in \`.handoffs/config.json\`).`;
-  return [
-    lead,
-    "",
-    brief,
-    "",
-    "## How to work",
-    "- Stay inside `scope.allowed`; never touch `scope.forbidden`. Files outside scope fail verification.",
-    `- Call \`handoff_update\` with a short progress note at least every ${every} minutes, or the lease (${leaseMinutes} min) lapses and the handoff reopens.`,
-    checkRule,
-    "- If verification returns `changes_requested`, fix what it reports and submit again.",
-    "- When done, commit your work and make this call with real values, one `criteria` entry per acceptance item:",
-    "",
-    submitBlock(h),
-  ].join("\n");
+  return [lead, "", brief, "", workRules(h, leaseMinutes)].join("\n");
 }
 
 function refusal(err: ServiceError, id: string | undefined, agent: AgentRef): string | null {

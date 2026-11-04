@@ -41,6 +41,13 @@ export function registerHandoffPrompt(server: McpServer, paths: RepoPaths): void
           "Hand the task off to another coding agent with exactly one `handoff_create` call.",
           "",
           "Use the task the user described in this conversation. If it isn't clear what the task is, ask the user before calling `handoff_create`.",
+          "",
+          "## Don't do the task yourself",
+          "You are the planner: another agent does the work. Don't edit, create or delete files for this task, and don't commit.",
+          "If you already changed files for this task in this session, stop and tell the user which files, then ask which they want before calling `handoff_create`:",
+          "- a `review` handoff of those changes (the other agent checks them and edits nothing), or",
+          "- you revert your changes first, then hand off the whole task as `implement`.",
+          "Never hand off `implement` work on top of your own uncommitted changes to the same files.",
         ];
         if (hint !== "") {
           lines.push(

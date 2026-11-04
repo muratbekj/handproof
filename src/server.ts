@@ -46,7 +46,7 @@ export function createServer(deps: ServerDeps): McpServer {
   registerCreate(server, service);
   registerList(server, service);
   registerGet(server, service);
-  registerClaim(server, service);
+  registerClaim(server, service, deps.paths);
   registerUpdate(server, service);
   registerRelease(server, service);
   registerCancel(server, service);

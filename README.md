@@ -37,8 +37,12 @@ mkdir -p .cursor && $EDITOR .cursor/mcp.json
      }
    }
    ```
-5. In Claude Code, describe the task in chat, then run `/mcp__handoffs__handoff`. Claude Code passes only one word per prompt argument, so type the task in chat, not after the command.
-6. In Cursor, run the handoffs `pickup` prompt. Cursor claims the handoff, works inside its scope and calls `handoff_submit`. Back in Claude Code, run `/mcp__handoffs__review` to accept or reject the verified result.
+5. In Claude Code, describe the task in chat and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run `/mcp__handoffs__handoff`. Claude Code passes only one word per prompt argument, so type the task in chat, not after the command. If you don't say "don't write code", Claude Code may start doing the task itself.
+6. In Cursor, pick the handoff up:
+   - **Cursor editor:** run the handoffs `pickup` prompt from the chat's `/` menu.
+   - **Cursor Agent CLI** (`cursor-agent`): it doesn't support MCP prompts, so ask it to *"call the handoffs `handoff_claim` tool"*. The reply has the same brief, working rules and `handoff_submit` call as `pickup`.
+
+   Cursor works inside the scope and calls `handoff_submit`. Back in Claude Code, run `/mcp__handoffs__review` to accept or reject the verified result.
 
 ## How it works
 
@@ -102,7 +106,7 @@ Environment variables, set per harness in its MCP config:
 | `handoff_create` | any agent | Validates and stores a new `open` handoff; returns its id, warnings and the count of pre-existing changes |
 | `handoff_list` | any agent | Summaries, filtered by status, kind, recipient or your involvement |
 | `handoff_get` | any agent | One handoff with its event timeline and markdown brief |
-| `handoff_claim` | an agent the handoff is addressed to (`to` is its name or `any`), or a human | `open` → `claimed` with a lease; with no id, claims the next one for you |
+| `handoff_claim` | an agent the handoff is addressed to (`to` is its name or `any`), or a human | `open` → `claimed` with a lease; with no id, claims the next one for you. Replies with the brief, working rules and the `handoff_submit` call to make |
 | `handoff_update` | the claimant | Adds a progress note and renews the lease |
 | `handoff_release` | the claimant | Gives it back: → `open` |
 | `handoff_cancel` | the creator or a human | `open` → `cancelled` (final) |
@@ -119,7 +123,7 @@ Environment variables, set per harness in its MCP config:
 
 ### Prompts
 
-In Claude Code the prompts are `/mcp__handoffs__handoff`, `/mcp__handoffs__pickup` and `/mcp__handoffs__review`. Every argument is optional and a single word.
+In Claude Code the prompts are `/mcp__handoffs__handoff`, `/mcp__handoffs__pickup` and `/mcp__handoffs__review`. Every argument is optional and a single word. Clients without prompt support (such as the Cursor Agent CLI) can use the tools directly: `handoff_claim`'s reply ends with the same working rules and `handoff_submit` call that `pickup` gives.
 
 | Prompt | Arguments | Effect |
 | --- | --- | --- |
@@ -161,7 +165,7 @@ handoffs review <id> accept|reject [reason...]  # accept or reject a verified ha
 Run by a human; not automated.
 
 1. Configure both harnesses in the same repo: Claude Code as `planner` and Cursor as `cursor-impl` (see [`examples/`](examples/)).
-2. In Claude Code, describe a small task and run `/mcp__handoffs__handoff`; the agent calls `handoff_create`. Note the returned id.
+2. In Claude Code, describe a small task, say not to write code because it's being handed off, and run `/mcp__handoffs__handoff`; the agent calls `handoff_create`. Note the returned id.
 3. In Cursor, call `handoff_list`; the same id appears.
-4. In Cursor, call `handoff_claim` with that id (or run the `pickup` prompt); it returns `claimed` and the markdown brief.
+4. In Cursor, call `handoff_claim` with that id (or, in the Cursor editor, run the `pickup` prompt); it returns `claimed`, the markdown brief and the `handoff_submit` call to make.
 5. In a terminal, run `handoffs show <id>`; it shows the handoff claimed by `cursor-impl`.
