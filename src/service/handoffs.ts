@@ -9,6 +9,7 @@ import { isBusy } from "../store/db.ts";
 import type { HandoffEvent, HandoffRepo, NewEvent } from "../store/repo.ts";
 import { transition } from "./lifecycle.ts";
 import { rolesFor } from "./roles.ts";
+import { scanSecrets, secretError } from "../verify/secrets.ts";
 
 export type ServiceError = { error: string; message: string; [k: string]: unknown };
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ServiceError };
@@ -112,6 +113,15 @@ function validationFailed(issues: Issue[]): ServiceError {
   return { error: "validation_failed", message: `invalid input: ${summary}`, issues };
 }
 
+/** Agent-written text fields of a create request, scanned on the raw input before anything is stored. */
+const SCANNED_CREATE_FIELDS = ["title", "goal", "context", "constraints", "acceptance"] as const;
+
+function scanCreateInput(raw: unknown) {
+  if (raw === null || typeof raw !== "object") return [];
+  const rec = raw as Record<string, unknown>;
+  return SCANNED_CREATE_FIELDS.flatMap((f) => scanSecrets(rec[f], [f]));
+}
+
 export function createHandoffService(deps: ServiceDeps): HandoffService {
   const { repo, config, paths, agent, git } = deps;
   const leaseMs = config.leaseMinutes * 60_000;
@@ -159,7 +169,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     at: string,
     makeClaim: (h: Handoff) => Handoff["claim"],
     data: Record<string, unknown>,
-    issue: Issue | null,
+    inputError: ServiceError | null,
   ): Result<Handoff> => {
     for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
       const h = repo.get(id);
@@ -176,7 +186,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
         return fail({ error: t.code, message: t.reason, reason: t.reason });
       }
       // Input is judged after the tick and the state check, so a lapsed lease reports lease_expired.
-      if (issue !== null) return fail(validationFailed([issue]));
+      if (inputError !== null) return fail(inputError);
       const claim = makeClaim(h);
       const ev: NewEvent = {
         at,
@@ -204,6 +214,8 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
   return {
     create(raw) {
       return guarded((at) => {
+        const secrets = secretError(scanCreateInput(raw));
+        if (secrets !== null) return fail(secrets);
         const parsed = parseHandoffInput(raw, { config, repoRoot: paths.worktreeRoot });
         if (!parsed.ok) return fail(validationFailed(parsed.failure.issues));
         const head = git.head();
@@ -308,6 +320,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
 
     update(id, note) {
       const issue = textIssue("note", note, NOTE_MAX);
+      const inputError = issue !== null ? validationFailed([issue]) : secretError(scanSecrets(note, ["note"]));
       return guarded((at) => {
         const leaseUntil = leaseFrom(at);
         return applyTransition(
@@ -316,14 +329,16 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           at,
           (h) => (h.claim === null ? null : { ...h.claim, leaseUntil }),
           { note, leaseUntil },
-          issue,
+          inputError,
         );
       });
     },
 
     release(id, reason) {
       const issue = textIssue("reason", reason, REASON_MAX);
-      return guarded((at) => applyTransition(id, "release", at, () => null, { reason }, issue));
+      return guarded((at) =>
+        applyTransition(id, "release", at, () => null, { reason }, issue === null ? null : validationFailed([issue])),
+      );
     },
 
     inbox() {
@@ -333,7 +348,14 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     cancel(id, reason) {
       const issue = reason === undefined ? null : textIssue("reason", reason, REASON_MAX);
       return guarded((at) =>
-        applyTransition(id, "cancel", at, () => null, reason === undefined ? {} : { reason }, issue),
+        applyTransition(
+          id,
+          "cancel",
+          at,
+          () => null,
+          reason === undefined ? {} : { reason },
+          issue === null ? null : validationFailed([issue]),
+        ),
       );
     },
 
