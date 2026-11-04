@@ -1,4 +1,4 @@
-import type { Config, RepoPaths } from "../config.ts";
+import { type Config, type RepoPaths, loadConfig } from "../config.ts";
 import { isHandoffsError } from "../errors.ts";
 import type { GitInfo } from "../git.ts";
 import { newHandoffId } from "../ids.ts";
@@ -256,7 +256,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
   });
 
   const runVerification = (h: Handoff): Promise<Verification> =>
-    verifyHandoff(h, { config, paths, now: deps.now, by: agent.name });
+    verifyHandoff(h, { paths, now: deps.now, by: agent.name });
 
   /** Submit input checked against `h`: structure, summary, acceptance coverage, then secrets. */
   const parseSubmit = (h: Handoff, raw: unknown): Result<SubmitInput> => {
@@ -479,7 +479,9 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           if (!checked.ok) return checked;
           const { summary, criteria } = checked.value;
           const commits = checked.value.commits ?? [];
-          const deadline = new Date(Date.parse(at) + (checksTimeoutSec(h, config) + 60) * 1000).toISOString();
+          // Same on-disk config the verification will load, so the deadline covers its timeouts.
+          const timeoutSec = checksTimeoutSec(h, loadConfig(paths));
+          const deadline = new Date(Date.parse(at) + (timeoutSec + 60) * 1000).toISOString();
           const next: Handoff = {
             ...h,
             status: t.to,

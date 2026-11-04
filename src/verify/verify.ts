@@ -1,4 +1,4 @@
-import type { Config, RepoPaths } from "../config.ts";
+import { type Config, type RepoPaths, loadConfig } from "../config.ts";
 import { isHandoffsError } from "../errors.ts";
 import type { Handoff } from "../schema/handoff.ts";
 import { type CheckResult, checksToRun, runCheck } from "./checks.ts";
@@ -22,7 +22,6 @@ export interface Verification {
 }
 
 export interface VerifyDeps {
-  config: Config;
   paths: RepoPaths;
   now: () => Date;
   by: string;
@@ -65,12 +64,15 @@ function criteriaResults(h: Handoff, checks: CheckResult[]): CriterionResult[] {
 /**
  * Runs the handoff's checks (sequentially, in the caller's worktree), then the scope diff, and
  * judges every acceptance criterion. Runs outside any transaction; never changes state.
+ * Config is re-read from disk on every run, so a long-running server uses the current checks
+ * (throws config_invalid when it is broken).
  */
 export async function verifyHandoff(h: Handoff, deps: VerifyDeps): Promise<Verification> {
+  const config = loadConfig(deps.paths);
   const at = deps.now().toISOString();
   const checks: CheckResult[] = [];
   for (const name of checksToRun(h)) {
-    const def = Object.hasOwn(deps.config.checks, name) ? deps.config.checks[name] : undefined;
+    const def = Object.hasOwn(config.checks, name) ? config.checks[name] : undefined;
     checks.push(
       await runCheck(name, def, {
         cwd: deps.paths.worktreeRoot,
