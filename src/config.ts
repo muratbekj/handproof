@@ -27,7 +27,7 @@ export interface RepoPaths {
 /** Git variables that would make `git rev-parse` ignore `cwd`. */
 const GIT_LOCATION_VARS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"];
 
-function gitEnv(): Record<string, string> {
+export function gitEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v !== undefined && !GIT_LOCATION_VARS.includes(k)) out[k] = v;
