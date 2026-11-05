@@ -13,36 +13,60 @@ The demo shows Claude Code handing a task to Cursor, Cursor's out-of-scope `pack
 
 ## Quickstart
 
+handproof doesn't care which app plays which role. Every session gets an agent name (`HANDPROOF_AGENT`), and roles come from what that agent does:
+
+- **Planner:** creates a handoff. It's the handoff's creator, so it (or a human) also reviews it.
+- **Implementer:** claims the handoff, does the work and submits it. The server then runs the checks.
+
+Any MCP client can take either role: Claude Code, Cursor, Codex, or several sessions of the same app. The steps below work for all of them; [Connect your agents](#connect-your-agents) shows the setup for each app.
+
 In the repository you want to share handoffs in:
 
 ```bash
 bunx handproof init
 $EDITOR .handproof/config.json
-claude mcp add handproof -e HANDPROOF_AGENT=planner -e HANDPROOF_HARNESS=claude-code -- bunx handproof serve
-mkdir -p .cursor && $EDITOR .cursor/mcp.json
 ```
 
 1. `init` writes `.handproof/config.json` and adds the runtime files to `.gitignore`.
 2. Set the commands your checks run (`test`, `typecheck`, `lint`, …) and commit the config.
-3. Register the server in Claude Code as agent `planner` (more in [`examples/claude-code.md`](examples/claude-code.md)).
-4. Register it in Cursor as agent `cursor-impl`, in `.cursor/mcp.json` (same as [`examples/cursor.mcp.json`](examples/cursor.mcp.json)):
-   ```json
-   {
-     "mcpServers": {
-       "handproof": {
-         "command": "bunx",
-         "args": ["handproof", "serve"],
-         "env": { "HANDPROOF_AGENT": "cursor-impl", "HANDPROOF_HARNESS": "cursor" }
-       }
-     }
-   }
-   ```
-5. In Claude Code, describe the task in chat and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run `/mcp__handproof__create`. Claude Code passes only one word per prompt argument, so type the task in chat, not after the command. If you don't say "don't write code", Claude Code may start doing the task itself.
-6. In Cursor, pick the handoff up:
-   - **Cursor editor:** run the handproof `pickup` prompt from the chat's `/` menu.
-   - **Cursor Agent CLI** (`cursor-agent`): it doesn't support MCP prompts, so ask it to *"call the handproof `handoff_claim` tool"*. The reply has the same brief, working rules and `handoff_submit` call as `pickup`.
+3. Connect each session with its own agent name, for example a planner and an implementer ([Connect your agents](#connect-your-agents)).
+4. **Planner session:** describe the task and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run the `create` prompt (`/mcp__handproof__create` in Claude Code). In apps without prompt support, ask it to *"call the handproof `handoff_create` tool"*. If you don't say "don't write code", the agent may start doing the task itself.
+5. **Implementer session:** run the `pickup` prompt, or ask it to *"call the handproof `handoff_claim` tool"*. The reply has the brief, the working rules and the exact `handoff_submit` call to make when done. The implementer works inside the scope and submits; the server runs the checks and the scope check.
+6. **Review:** in the planner's session run the `review` prompt (or ask it to call `handoff_review`), or review from any terminal with `handproof review <id> accept` (the CLI counts as a human).
 
-   Cursor works inside the scope and calls `handoff_submit`. Back in Claude Code, run `/mcp__handproof__review` to accept or reject the verified result.
+## Connect your agents
+
+| App | Register the server | Prompts |
+| --- | --- | --- |
+| Claude Code | `claude mcp add handproof -e HANDPROOF_AGENT=planner -e HANDPROOF_HARNESS=claude-code -- bunx handproof serve` ([`examples/claude-code.md`](examples/claude-code.md)) | Yes: `/mcp__handproof__create`, `/mcp__handproof__pickup`, `/mcp__handproof__review`. One word per argument, so type the task in chat, not after the command. |
+| Cursor editor | `.cursor/mcp.json` in the repo ([`examples/cursor.mcp.json`](examples/cursor.mcp.json)) | In the chat's `/` menu (not yet verified by us) |
+| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | No. Cursor Agent CLI doesn't request MCP prompts; ask it to call `handoff_claim` (or `handoff_create`) instead |
+| Codex CLI | `codex mcp add handproof --env HANDPROOF_AGENT=codex-impl --env HANDPROOF_HARNESS=codex -- bunx handproof serve`, or a project `.codex/config.toml` ([`examples/codex.md`](examples/codex.md)) | Codex documents MCP tools, not prompts: ask it to call the tools |
+| Anything else | any MCP client that starts a stdio server: `bunx handproof serve` with `HANDPROOF_AGENT` set | Use the tools |
+
+`.cursor/mcp.json` for an implementer named `cursor-impl`:
+
+```json
+{
+  "mcpServers": {
+    "handproof": {
+      "command": "bunx",
+      "args": ["handproof", "serve"],
+      "env": { "HANDPROOF_AGENT": "cursor-impl", "HANDPROOF_HARNESS": "cursor" }
+    }
+  }
+}
+```
+
+### Several sessions of the same app
+
+Two Codex sessions, or two Claude Code sessions, work the same way as two different apps: each needs its own agent name.
+
+- Give each session its own git worktree (`git worktree add ../myrepo-impl`). All worktrees of a repo share one handproof database, and each submit is checked in the implementer's own worktree, so parallel sessions don't see each other's changes.
+- Put each session's config in its worktree: `.cursor/mcp.json`, `.codex/config.toml` (Codex reads it in trusted projects), or for Claude Code run `claude mcp add …` inside that worktree (its default scope is the current directory).
+- Add those config folders (`.cursor/`, `.codex/`) to `.gitignore`. The scope check counts untracked files that aren't ignored, so a stray per-worktree config would fail a submit.
+
+Example: Codex only, planner `codex-planner` in the main checkout and implementer `codex-impl` in `../myrepo-impl`, each with its own `.codex/config.toml`; you review with `handproof review <id> accept`.
 
 ## How it works
 
