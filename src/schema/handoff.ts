@@ -60,12 +60,25 @@ export type HandoffInput = z.infer<typeof HandoffInput>;
 /** What a caller may send (defaulted fields optional). */
 export type HandoffInputRaw = z.input<typeof HandoffInput>;
 
+/** An uncommitted change that existed at create: repo-relative POSIX path and its `git hash-object` (null = deleted). */
+export const Preexisting = z.object({
+  path: z.string(),
+  blob: z.string().nullable(),
+});
+export type Preexisting = z.infer<typeof Preexisting>;
+
 export const Handoff = HandoffInput.extend({
   id: z.string(), // "h_01JC..." (ULID)
   schemaVersion: z.literal(1),
   status: Status,
   from: AgentRef,
-  repo: z.object({ root: z.string(), branch: z.string(), baseCommit: z.string() }),
+  repo: z.object({
+    root: z.string(),
+    branch: z.string(),
+    baseCommit: z.string(),
+    worktree: z.string().optional(), // absolute worktreeRoot of the creator; absent on Phase 1–2 rows
+    preexisting: z.array(Preexisting).default([]), // uncommitted changes when the handoff was created
+  }),
   claim: z.object({ by: AgentRef, leaseUntil: z.iso.datetime() }).nullable(),
   result: z
     .object({
@@ -78,3 +91,8 @@ export const Handoff = HandoffInput.extend({
   updatedAt: z.iso.datetime(),
 });
 export type Handoff = z.infer<typeof Handoff>;
+
+/** `repo.preexisting`, or [] for rows written before Phase 3 (stored docs are not re-parsed on read). */
+export function preexistingOf(h: Handoff): Preexisting[] {
+  return (h.repo as { preexisting?: Preexisting[] }).preexisting ?? [];
+}

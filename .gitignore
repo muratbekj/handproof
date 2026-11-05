@@ -12,3 +12,6 @@ coverage/
 .handoffs/handoffs.db
 .handoffs/handoffs.db-*
 .handoffs/runs/
+
+# per-worktree agent configs (team trial)
+.cursor/

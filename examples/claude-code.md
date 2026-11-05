@@ -13,3 +13,5 @@ claude mcp add handoffs -e HANDOFFS_AGENT=planner -e HANDOFFS_HARNESS=claude-cod
 ```
 
 The server finds the repository from its working directory. Set `-e HANDOFFS_REPO=/abs/path/to/repo` if Claude Code starts it elsewhere.
+
+Then describe the task in chat and run `/mcp__handoffs__handoff`. Claude Code passes only one word per prompt argument, so the task goes in the chat, not after the command. Review a verified result with `/mcp__handoffs__review`.

@@ -3,7 +3,7 @@ import { createGitInfo } from "../git.ts";
 import type { AgentRef } from "../schema/handoff.ts";
 import { type Db, openDb } from "../store/db.ts";
 import { type HandoffRepo, createRepo } from "../store/repo.ts";
-import { type HandoffService, createHandoffService } from "./handoffs.ts";
+import { type HandoffAdmin, type HandoffService, createHandoffService } from "./handoffs.ts";
 
 /** The one place that wires DB + repo + git + service (server, CLI, tests). */
 export function openService(opts: {
@@ -11,7 +11,7 @@ export function openService(opts: {
   config: Config;
   agent: AgentRef;
   now?: () => Date;
-}): { service: HandoffService; repo: HandoffRepo; db: Db; close(): void } {
+}): { service: HandoffService & HandoffAdmin; repo: HandoffRepo; db: Db; close(): void } {
   const db = openDb(opts.paths.dbPath);
   const repo = createRepo(db);
   const service = createHandoffService({

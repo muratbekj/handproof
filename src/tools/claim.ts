@@ -1,6 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import { type RepoPaths, loadConfig } from "../config.ts";
+import { isHandoffsError } from "../errors.ts";
 import { renderBrief } from "../render/markdown.ts";
+import { workRules } from "../render/work.ts";
 import type { HandoffService } from "../service/handoffs.ts";
 import { HandoffId, looseInput, parseArgs } from "./input.ts";
 import { fromResult, safely, toolErr } from "./result.ts";
@@ -11,11 +14,12 @@ const ClaimArgs = z.object({
   ),
 });
 
-export function registerClaim(server: McpServer, service: HandoffService): void {
+/** The markdown is the brief plus the working rules and the exact submit call, for clients without prompt support. */
+export function registerClaim(server: McpServer, service: HandoffService, paths: RepoPaths): void {
   server.registerTool(
     "handoff_claim",
     {
-      description: "Claim an open handoff, taking a lease on it, and return its markdown brief.",
+      description: "Claim an open handoff, taking a lease on it. Returns its markdown brief, the working rules and the exact handoff_submit call to make when done.",
       inputSchema: looseInput(ClaimArgs),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -23,11 +27,18 @@ export function registerClaim(server: McpServer, service: HandoffService): void 
       safely("handoff_claim", () => {
         const args = parseArgs(ClaimArgs, raw);
         if (!args.ok) return toolErr(args.error);
-        return fromResult(service.claim(args.value.id), (handoff) => {
-          const full = service.get(handoff.id);
-          const events = full.ok ? full.value.events : [];
-          return { handoff, markdown: renderBrief(handoff, events) };
-        });
+        // Config first: a broken config fails the call before the claim's side effect.
+        let leaseMinutes: number;
+        try {
+          leaseMinutes = loadConfig(paths).leaseMinutes;
+        } catch (err) {
+          if (isHandoffsError(err)) return toolErr({ error: err.code, message: err.message });
+          throw err;
+        }
+        return fromResult(service.claim(args.value.id), (handoff) => ({
+          handoff,
+          markdown: `${renderBrief(handoff, service.history(handoff.id))}\n\n${workRules(handoff, leaseMinutes)}`,
+        }));
       }),
   );
 }

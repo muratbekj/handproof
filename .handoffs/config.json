@@ -1,0 +1,8 @@
+{
+  "leaseMinutes": 30,
+  "checks": {
+    "test": { "run": "bun test", "timeoutSec": 300 },
+    "typecheck": { "run": "bun run typecheck", "timeoutSec": 120 },
+    "lint": { "run": "bun run lint", "timeoutSec": 120 }
+  }
+}

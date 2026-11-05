@@ -1,7 +1,21 @@
 import type { AgentRef, Handoff, Kind, Status } from "../schema/handoff.ts";
 import type { Db } from "./db.ts";
 
-export type EventType = "created" | "claimed" | "updated" | "released" | "cancelled" | "lease_expired";
+export type EventType =
+  | "created"
+  | "claimed"
+  | "updated"
+  | "released"
+  | "cancelled"
+  | "lease_expired"
+  | "submitted"
+  | "verification"
+  | "verified"
+  | "changes_requested"
+  | "accepted"
+  | "rejected"
+  | "verification_interrupted"
+  | "logs_pruned";
 
 export interface HandoffEvent {
   seq: number;
@@ -51,6 +65,13 @@ export interface HandoffRepo {
   renewLeases(agentName: string, leaseUntil: string, nowIso: string): number;
   /** Reopens claimed/changes_requested rows whose lease_until <= now; returns their ids. */
   expireLeases(nowIso: string): string[];
+  /** Event only, no row change. */
+  appendEvent(id: string, ev: NewEvent): void;
+  /**
+   * Submitted rows whose verification deadline (lease_until) <= now → changes_requested with
+   * lease_until = leaseUntil, event 'verification_interrupted' by system. Returns their ids.
+   */
+  expireVerifications(nowIso: string, leaseUntil: string): string[];
   /** seq ASC */
   events(id: string): HandoffEvent[];
 }
@@ -221,6 +242,34 @@ export function createRepo(db: Db): HandoffRepo {
     return rows.map((r) => r.id);
   });
 
+  const appendTx = db.transaction((id: string, ev: NewEvent): void => {
+    insertEvent(id, ev);
+  });
+
+  const expireVerificationsTx = db.transaction((nowIso: string, leaseUntil: string): string[] => {
+    const rows = db
+      .query<{ id: string; claim_json: string | null; claim_by: string | null; lease_until: string }, [string]>(
+        `SELECT id, claim_json, claim_by, lease_until FROM handoffs
+         WHERE status = 'submitted' AND lease_until <= ?
+         ORDER BY created_at ASC, id ASC`,
+      )
+      .all(nowIso);
+    const update = db.query(
+      `UPDATE handoffs SET status = 'changes_requested', claim_json = ?, lease_until = ?, updated_at = ? WHERE id = ?`,
+    );
+    for (const row of rows) {
+      const claim = row.claim_json === null ? null : (JSON.parse(row.claim_json) as NonNullable<Handoff["claim"]>);
+      update.run(claim === null ? null : JSON.stringify({ ...claim, leaseUntil }), leaseUntil, nowIso, row.id);
+      insertEvent(row.id, {
+        at: nowIso,
+        actor: "system",
+        type: "verification_interrupted",
+        data: { claimBy: row.claim_by, deadline: row.lease_until, leaseUntil },
+      });
+    }
+    return rows.map((r) => r.id);
+  });
+
   return {
     insert(h, ev) {
       insertTx.immediate(h, ev);
@@ -282,6 +331,14 @@ export function createRepo(db: Db): HandoffRepo {
 
     expireLeases(nowIso) {
       return expireTx.immediate(nowIso);
+    },
+
+    appendEvent(id, ev) {
+      appendTx.immediate(id, ev);
+    },
+
+    expireVerifications(nowIso, leaseUntil) {
+      return expireVerificationsTx.immediate(nowIso, leaseUntil);
     },
 
     events(id) {

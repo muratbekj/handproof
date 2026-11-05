@@ -1,15 +1,22 @@
 import { McpServer, ResourceNotFoundError, ResourceTemplate } from "@modelcontextprotocol/server";
 import type { Config, RepoPaths } from "./config.ts";
+import { registerHandoffPrompt } from "./prompts/handoff.ts";
+import { registerPickupPrompt } from "./prompts/pickup.ts";
+import { registerReviewPrompt } from "./prompts/review.ts";
 import { renderBrief, renderInbox } from "./render/markdown.ts";
+import { serviceProtocolError } from "./rpc-error.ts";
 import type { AgentRef } from "./schema/handoff.ts";
-import type { HandoffService } from "./service/handoffs.ts";
+import type { HandoffService, ServiceError } from "./service/handoffs.ts";
 import { registerCancel } from "./tools/cancel.ts";
 import { registerClaim } from "./tools/claim.ts";
 import { registerCreate } from "./tools/create.ts";
 import { registerGet } from "./tools/get.ts";
 import { registerList } from "./tools/list.ts";
 import { registerRelease } from "./tools/release.ts";
+import { registerReview } from "./tools/review.ts";
+import { registerSubmit } from "./tools/submit.ts";
 import { registerUpdate } from "./tools/update.ts";
+import { registerVerify } from "./tools/verify.ts";
 import { VERSION } from "./version.ts";
 
 export interface ServerDeps {
@@ -22,8 +29,14 @@ export interface ServerDeps {
 const MARKDOWN = "text/markdown";
 const NON_TERMINAL = ["open", "claimed", "submitted", "changes_requested", "verified"] as const;
 
+/** Resource callbacks reject with a JSON-RPC error that carries the service error code in `data`. */
+function resourceError(err: ServiceError, uri: string): Error {
+  return err.error === "not_found" ? new ResourceNotFoundError(uri) : serviceProtocolError(err);
+}
+
 /**
- * Builds the MCP server: seven handoff tools, the inbox resource and one resource per handoff.
+ * Builds the MCP server: ten handoff tools, the inbox resource, one resource per handoff and the
+ * handoff, pickup and review prompts.
  * Never write to stdout from server code: it carries the JSON-RPC stream. Log with console.error.
  */
 export function createServer(deps: ServerDeps): McpServer {
@@ -33,17 +46,24 @@ export function createServer(deps: ServerDeps): McpServer {
   registerCreate(server, service);
   registerList(server, service);
   registerGet(server, service);
-  registerClaim(server, service);
+  registerClaim(server, service, deps.paths);
   registerUpdate(server, service);
   registerRelease(server, service);
   registerCancel(server, service);
+  registerSubmit(server, service);
+  registerVerify(server, service);
+  registerReview(server, service);
+
+  registerHandoffPrompt(server, deps.paths);
+  registerPickupPrompt(server, { paths: deps.paths, agent, service });
+  registerReviewPrompt(server, { agent, service });
 
   server.registerResource(
     "handoff",
     new ResourceTemplate("handoff://{id}", {
       list: () => {
         const r = service.list({ status: [...NON_TERMINAL], limit: 200 });
-        if (!r.ok) throw new Error(r.error.message);
+        if (!r.ok) throw resourceError(r.error, "handoff://");
         return {
           resources: r.value.map((h) => ({ uri: `handoff://${h.id}`, name: h.title, mimeType: MARKDOWN })),
         };
@@ -52,10 +72,7 @@ export function createServer(deps: ServerDeps): McpServer {
     { description: "Markdown brief for one handoff", mimeType: MARKDOWN },
     (uri, { id }) => {
       const r = service.get(String(id));
-      if (!r.ok) {
-        if (r.error.error === "not_found") throw new ResourceNotFoundError(uri.href);
-        throw new Error(r.error.message);
-      }
+      if (!r.ok) throw resourceError(r.error, uri.href);
       return { contents: [{ uri: uri.href, mimeType: MARKDOWN, text: renderBrief(r.value.handoff, r.value.events) }] };
     },
   );
@@ -66,7 +83,7 @@ export function createServer(deps: ServerDeps): McpServer {
     { description: `Open handoffs addressed to ${agent.name} or any`, mimeType: MARKDOWN },
     (uri) => {
       const r = service.inbox();
-      if (!r.ok) throw new Error(r.error.message);
+      if (!r.ok) throw resourceError(r.error, uri.href);
       return { contents: [{ uri: uri.href, mimeType: MARKDOWN, text: renderInbox(agent.name, r.value) }] };
     },
   );
