@@ -11,7 +11,7 @@ import { createServer } from "./server.ts";
 import { openService } from "./service/open.ts";
 import { VERSION } from "./version.ts";
 
-const USAGE = `usage: handoffs <command>
+const USAGE = `usage: handproof <command>
 
 commands:
   init     create .handproof/config.json and add runtime files to .gitignore
