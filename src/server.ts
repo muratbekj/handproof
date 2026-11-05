@@ -1,6 +1,6 @@
 import { McpServer, ResourceNotFoundError, ResourceTemplate } from "@modelcontextprotocol/server";
 import type { Config, RepoPaths } from "./config.ts";
-import { registerHandoffPrompt } from "./prompts/handoff.ts";
+import { registerCreatePrompt } from "./prompts/create.ts";
 import { registerPickupPrompt } from "./prompts/pickup.ts";
 import { registerReviewPrompt } from "./prompts/review.ts";
 import { renderBrief, renderInbox } from "./render/markdown.ts";
@@ -41,7 +41,7 @@ function resourceError(err: ServiceError, uri: string): Error {
  */
 export function createServer(deps: ServerDeps): McpServer {
   const { service, agent } = deps;
-  const server = new McpServer({ name: "handoffs-mcp", version: VERSION });
+  const server = new McpServer({ name: "handproof", version: VERSION });
 
   registerCreate(server, service);
   registerList(server, service);
@@ -54,7 +54,7 @@ export function createServer(deps: ServerDeps): McpServer {
   registerVerify(server, service);
   registerReview(server, service);
 
-  registerHandoffPrompt(server, deps.paths);
+  registerCreatePrompt(server, deps.paths);
   registerPickupPrompt(server, { paths: deps.paths, agent, service });
   registerReviewPrompt(server, { agent, service });
 

@@ -7,9 +7,9 @@ import { testEnv } from "./helpers/env";
 import { tmpRepo, type TmpRepo } from "./helpers/tmpRepo";
 
 const GITIGNORE_LINES = [
-  ".handoffs/handoffs.db",
-  ".handoffs/handoffs.db-*",
-  ".handoffs/runs/",
+  ".handproof/handoffs.db",
+  ".handproof/handoffs.db-*",
+  ".handproof/runs/",
 ] as const;
 
 function withRepo(fn: (repo: TmpRepo) => void): void {
@@ -94,7 +94,7 @@ describe("runInit", () => {
         path.join(paths.root, ".gitignore"),
         "utf8",
       );
-      expect(countLine(gitignore, "# handoffs-mcp")).toBe(1);
+      expect(countLine(gitignore, "# handproof")).toBe(1);
       for (const line of GITIGNORE_LINES) {
         expect(countLine(gitignore, line)).toBe(1);
       }
@@ -156,7 +156,7 @@ describe("main", () => {
 
       expect(code).toBe(0);
       expect(
-        fs.existsSync(path.join(repo.dir, ".handoffs", "config.json")),
+        fs.existsSync(path.join(repo.dir, ".handproof", "config.json")),
       ).toBe(true);
       const gitignore = fs.readFileSync(
         path.join(repo.dir, ".gitignore"),

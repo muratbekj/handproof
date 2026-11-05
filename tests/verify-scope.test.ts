@@ -35,10 +35,10 @@ describe("checkScope", () => {
     expect(checkScope([], SCOPE, "review")).toEqual([]);
   });
 
-  test("protected .handoffs/config.json", () => {
-    expect(PROTECTED_PATHS).toContain(".handoffs/config.json");
-    expect(checkScope([".handoffs/config.json"], SCOPE, "implement")).toEqual([
-      { path: ".handoffs/config.json", rule: "protected: .handoffs/config.json" },
+  test("protected .handproof/config.json", () => {
+    expect(PROTECTED_PATHS).toContain(".handproof/config.json");
+    expect(checkScope([".handproof/config.json"], SCOPE, "implement")).toEqual([
+      { path: ".handproof/config.json", rule: "protected: .handproof/config.json" },
     ]);
   });
 });
@@ -89,19 +89,19 @@ describe("changedFiles", () => {
     }
   });
 
-  test("drops .handoffs runs but not protected config", () => {
+  test("drops .handproof runs but not protected config", () => {
     const repo = tmpRepo();
     try {
       const base = baseSha(repo);
-      fs.mkdirSync(path.join(repo.dir, ".handoffs", "runs"), { recursive: true });
-      fs.writeFileSync(path.join(repo.dir, ".handoffs", "runs", "x.log"), "log\n");
-      fs.writeFileSync(path.join(repo.dir, ".handoffs", "config.json"), "{}\n");
-      repo.git(["add", ".handoffs/config.json"]);
+      fs.mkdirSync(path.join(repo.dir, ".handproof", "runs"), { recursive: true });
+      fs.writeFileSync(path.join(repo.dir, ".handproof", "runs", "x.log"), "log\n");
+      fs.writeFileSync(path.join(repo.dir, ".handproof", "config.json"), "{}\n");
+      repo.git(["add", ".handproof/config.json"]);
       repo.git(["commit", "-m", "config"]);
 
       const { files } = changedFiles({ cwd: repo.dir, baseCommit: base, branch: "main" });
-      expect(files).not.toContain(".handoffs/runs/x.log");
-      expect(files).toContain(".handoffs/config.json");
+      expect(files).not.toContain(".handproof/runs/x.log");
+      expect(files).toContain(".handproof/config.json");
     } finally {
       repo.cleanup();
     }

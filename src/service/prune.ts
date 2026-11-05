@@ -10,7 +10,7 @@ export interface PruneOptions {
 }
 
 export interface PrunedFile {
-  /** Repo-relative POSIX path, e.g. `.handoffs/runs/<id>/<file>.log`. */
+  /** Repo-relative POSIX path, e.g. `.handproof/runs/<id>/<file>.log`. */
   path: string;
   bytes: number;
   /** Run directory name: the handoff id (or the orphan directory's name). */

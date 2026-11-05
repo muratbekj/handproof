@@ -7,7 +7,7 @@ import { testEnv } from "./helpers/env";
 import { tmpRepo } from "./helpers/tmpRepo";
 
 const PROJECT_ROOT = path.join(import.meta.dir, "..");
-const GITIGNORE_LINES = [".handoffs/handoffs.db", ".handoffs/handoffs.db-*", ".handoffs/runs/"] as const;
+const GITIGNORE_LINES = [".handproof/handoffs.db", ".handproof/handoffs.db-*", ".handproof/runs/"] as const;
 
 describe("bun pm pack dry-run (PLAN Step 4)", () => {
   test("pack list excludes src, tests, docs, notes, examples, SPEC", () => {
@@ -27,7 +27,7 @@ describe("bun pm pack dry-run (PLAN Step 4)", () => {
 });
 
 describe("packaged tarball install (PLAN Step 4)", () => {
-  test("handoffs-mcp init and --version from installed pack", () => {
+  test("handproof init and --version from installed pack", () => {
     const packDir = tmpDir("handoffs-pack-");
     const installDir = tmpDir("handoffs-install-");
     const repo = tmpRepo();
@@ -48,17 +48,17 @@ describe("packaged tarball install (PLAN Step 4)", () => {
       });
       expect(add.exitCode).toBe(0);
 
-      const bin = path.join(installDir, "node_modules", ".bin", "handoffs-mcp");
+      const bin = path.join(installDir, "node_modules", ".bin", "handproof");
       expect(fs.existsSync(bin)).toBe(true);
 
       const init = Bun.spawnSync([bin, "init"], {
         cwd: repo.dir,
-        env: testEnv({ HANDOFFS_REPO: repo.dir }),
+        env: testEnv({ HANDPROOF_REPO: repo.dir }),
         stdout: "pipe",
         stderr: "pipe",
       });
       expect(init.exitCode).toBe(0);
-      expect(fs.existsSync(path.join(repo.dir, ".handoffs", "config.json"))).toBe(true);
+      expect(fs.existsSync(path.join(repo.dir, ".handproof", "config.json"))).toBe(true);
       const gitignore = fs.readFileSync(path.join(repo.dir, ".gitignore"), "utf8");
       for (const line of GITIGNORE_LINES) {
         expect(gitignore).toContain(line);

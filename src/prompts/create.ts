@@ -24,10 +24,10 @@ function checksLine(names: string[]): string {
   return `\`acceptance[].check\`, when set, must be one of the configured checks: ${names.map((n) => `\`${n}\``).join(", ")}.`;
 }
 
-/** `/handoff`: no side effect; tells the agent how to package this session into one handoff_create call. */
-export function registerHandoffPrompt(server: McpServer, paths: RepoPaths): void {
+/** `create`: no side effect; tells the agent how to package this session into one handoff_create call. */
+export function registerCreatePrompt(server: McpServer, paths: RepoPaths): void {
   server.registerPrompt(
-    "handoff",
+    "create",
     {
       title: "Hand off",
       description: "Package the task from this conversation into one handoff_create call for another agent",

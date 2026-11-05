@@ -82,7 +82,7 @@ export function migrate(db: Db, migrations: readonly Migration[] = MIGRATIONS): 
     if (newest > migrations.length) {
       throw new HandoffsError(
         "db_schema_newer",
-        `database schema version ${newest} is newer than this handoffs-mcp knows (${migrations.length}); upgrade handoffs-mcp`,
+        `database schema version ${newest} is newer than this handproof knows (${migrations.length}); upgrade handproof`,
       );
     }
     const record = db.query("INSERT INTO schema_migrations (version, name, applied_at) VALUES ($version, $name, $at)");

@@ -67,10 +67,10 @@ describe("resolveRepo", () => {
 
       expect(paths.root).toBe(root);
       expect(paths.worktreeRoot).toBe(root);
-      expect(paths.handoffsDir).toBe(path.join(root, ".handoffs"));
-      expect(paths.configPath).toBe(path.join(root, ".handoffs", "config.json"));
-      expect(paths.dbPath).toBe(path.join(root, ".handoffs", "handoffs.db"));
-      expect(paths.runsDir).toBe(path.join(root, ".handoffs", "runs"));
+      expect(paths.handoffsDir).toBe(path.join(root, ".handproof"));
+      expect(paths.configPath).toBe(path.join(root, ".handproof", "config.json"));
+      expect(paths.dbPath).toBe(path.join(root, ".handproof", "handoffs.db"));
+      expect(paths.runsDir).toBe(path.join(root, ".handproof", "runs"));
     });
   });
 
@@ -83,22 +83,22 @@ describe("resolveRepo", () => {
 
       expect(paths.root).toBe(root);
       expect(paths.worktreeRoot).toBe(fs.realpathSync(worktree));
-      expect(paths.dbPath).toBe(path.join(root, ".handoffs", "handoffs.db"));
+      expect(paths.dbPath).toBe(path.join(root, ".handproof", "handoffs.db"));
     });
   });
 
-  test("HANDOFFS_REPO overrides the cwd", () => {
+  test("HANDPROOF_REPO overrides the cwd", () => {
     withRepo((repo) => {
       const elsewhere = tmpDir("handoffs-elsewhere-");
       try {
         const paths = resolveRepo({
           cwd: elsewhere,
-          env: testEnv({ HANDOFFS_REPO: repo.dir }),
+          env: testEnv({ HANDPROOF_REPO: repo.dir }),
         });
         const root = fs.realpathSync(repo.dir);
 
         expect(paths.root).toBe(root);
-        expect(paths.dbPath).toBe(path.join(root, ".handoffs", "handoffs.db"));
+        expect(paths.dbPath).toBe(path.join(root, ".handproof", "handoffs.db"));
       } finally {
         removeDir(elsewhere);
       }
@@ -198,8 +198,8 @@ describe("ConfigSchema and DEFAULT_CONFIG", () => {
 describe("resolveAgent and isHuman", () => {
   test("reads identity from the environment", () => {
     const planner = resolveAgent({
-      HANDOFFS_AGENT: "planner",
-      HANDOFFS_HARNESS: "claude-code",
+      HANDPROOF_AGENT: "planner",
+      HANDPROOF_HARNESS: "claude-code",
     });
     expect(planner.name).toBe("planner");
     expect(planner.harness).toBe("claude-code");
@@ -210,20 +210,20 @@ describe("resolveAgent and isHuman", () => {
     expect(anonymous.harness).toBe("other");
     expect(anonymous.session).toBeUndefined();
 
-    const invalidHarness = resolveAgent({ HANDOFFS_HARNESS: "vim" });
+    const invalidHarness = resolveAgent({ HANDPROOF_HARNESS: "vim" });
     expect(invalidHarness.name).toBe("anonymous");
     expect(invalidHarness.harness).toBe("other");
 
     const plannerWithInvalidHarness = resolveAgent({
-      HANDOFFS_AGENT: "planner",
-      HANDOFFS_HARNESS: "vim",
+      HANDPROOF_AGENT: "planner",
+      HANDPROOF_HARNESS: "vim",
     });
     expect(plannerWithInvalidHarness.name).toBe("planner");
     expect(plannerWithInvalidHarness.harness).toBe("other");
   });
 
   test("keeps an explicit session", () => {
-    const agent = resolveAgent({ HANDOFFS_SESSION: "ses_123" });
+    const agent = resolveAgent({ HANDPROOF_SESSION: "ses_123" });
     expect(agent.session).toBe("ses_123");
   });
 

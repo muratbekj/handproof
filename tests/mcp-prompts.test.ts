@@ -80,11 +80,11 @@ describe("MCP prompts (PLAN Step 3)", () => {
       await withPromptClient(repo, AGENTS.planner, async (client) => {
         const { prompts } = await client.listPrompts();
         const names = prompts.map((p) => p.name).sort();
-        expect(names).toEqual(["handoff", "pickup", "review"]);
+        expect(names).toEqual(["create", "pickup", "review"]);
         for (const p of prompts) {
           expect(p.description).toBeTruthy();
         }
-        const handoff = prompts.find((p) => p.name === "handoff");
+        const handoff = prompts.find((p) => p.name === "create");
         const pickup = prompts.find((p) => p.name === "pickup");
         const review = prompts.find((p) => p.name === "review");
         expect(handoff?.arguments?.map((a) => a.name)).toEqual(["request"]);
@@ -110,11 +110,11 @@ describe("MCP prompts (PLAN Step 3)", () => {
         AGENTS.planner,
         async (client) => {
           const onDisk = JSON.parse(
-            fs.readFileSync(path.join(emptyRepo.dir, ".handoffs", "config.json"), "utf8"),
+            fs.readFileSync(path.join(emptyRepo.dir, ".handproof", "config.json"), "utf8"),
           ) as { checks?: Record<string, unknown> };
           expect(onDisk.checks).toEqual({});
 
-          const empty = await client.getPrompt({ name: "handoff", arguments: {} });
+          const empty = await client.getPrompt({ name: "create", arguments: {} });
           expect(promptText(empty)).toMatch(/no checks are configured/i);
         },
         { checks: {} },
@@ -126,7 +126,7 @@ describe("MCP prompts (PLAN Step 3)", () => {
           withChecksRepo,
           AGENTS.planner,
           async (client) => {
-            const p = await client.getPrompt({ name: "handoff", arguments: {} });
+            const p = await client.getPrompt({ name: "create", arguments: {} });
             expect(promptText(p)).toContain("test");
           },
           { checks: { test: { run: "true", timeoutSec: 1 } } },
@@ -144,17 +144,17 @@ describe("MCP prompts (PLAN Step 3)", () => {
     try {
       await withPromptClient(repo, AGENTS.planner, async (client) => {
         const full = await client.getPrompt({
-          name: "handoff",
+          name: "create",
           arguments: { request: "add rate limiting to POST /login" },
         });
         const fullText = promptText(full);
         expect(fullText).toContain("add rate limiting to POST /login");
         expect(fullText.split("\n").some((line) => line.startsWith("Request hint: "))).toBe(true);
 
-        const oneWord = await client.getPrompt({ name: "handoff", arguments: { request: "add" } });
+        const oneWord = await client.getPrompt({ name: "create", arguments: { request: "add" } });
         expect(promptText(oneWord)).toMatch(/conversation/i);
 
-        const none = await client.getPrompt({ name: "handoff", arguments: {} });
+        const none = await client.getPrompt({ name: "create", arguments: {} });
         const noneText = promptText(none);
         expect(noneText).toMatch(/conversation/i);
         expect(noneText.split("\n").some((line) => line.startsWith("Request hint: "))).toBe(false);
@@ -471,7 +471,7 @@ describe("MCP prompts (PLAN Step 3)", () => {
           ok: false,
           error: {
             error: "db_busy",
-            message: "the handoffs database is busy; retry the call",
+            message: "the handproof database is busy; retry the call",
             retryable: true,
           },
         }),

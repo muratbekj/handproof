@@ -240,7 +240,7 @@ describe("Phase 1 review nits (PLAN Step 0)", () => {
           ok: false,
           error: {
             error: "db_busy",
-            message: "the handoffs database is busy; retry the call",
+            message: "the handproof database is busy; retry the call",
             retryable: true,
           },
         }),

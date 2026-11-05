@@ -23,7 +23,7 @@ export function safely(name: string, fn: () => CallToolResult): CallToolResult {
     return fn();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`handoffs: ${name} failed: ${err instanceof Error ? (err.stack ?? message) : message}`);
+    console.error(`handproof: ${name} failed: ${err instanceof Error ? (err.stack ?? message) : message}`);
     return toolErr({ error: "internal_error", message: `${name} failed unexpectedly: ${message}` });
   }
 }
@@ -34,7 +34,7 @@ export async function safelyAsync(name: string, fn: () => Promise<CallToolResult
     return await fn();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`handoffs: ${name} failed: ${err instanceof Error ? (err.stack ?? message) : message}`);
+    console.error(`handproof: ${name} failed: ${err instanceof Error ? (err.stack ?? message) : message}`);
     return toolErr({ error: "internal_error", message: `${name} failed unexpectedly: ${message}` });
   }
 }

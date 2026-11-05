@@ -110,7 +110,7 @@ describe("handoff prompt keeps the planner from doing the task", () => {
     try {
       const paths = initRepoHandoffs(repo);
       await withClient(paths, AGENTS.planner, async (client) => {
-        const p = await client.getPrompt({ name: "handoff", arguments: {} });
+        const p = await client.getPrompt({ name: "create", arguments: {} });
         const text = textOf(p.messages[0]?.content);
         expect(text).toContain("## Don't do the task yourself");
         expect(text).toMatch(/Don't edit, create or delete files for this task/);

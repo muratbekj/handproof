@@ -183,7 +183,7 @@ describe("MCP verify tools and CLI review (PLAN Step 6)", () => {
       expect(sub.ok).toBe(true);
       worker.close();
 
-      const env = testEnv({ HANDOFFS_REPO: repo.dir, HANDOFFS_AGENT: "human-cli" });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir, HANDPROOF_AGENT: "human-cli" });
       expect(await main(["review", id, "accept"], env, repo.dir)).toBe(0);
 
       const plannerAgain = openService({ paths, config, agent: AGENTS.planner });

@@ -26,7 +26,7 @@ export function workRules(h: Handoff, leaseMinutes: number): string {
   const checkRule =
     checks.length === 0
       ? "- No acceptance item names a check; report each criterion honestly in the submit call."
-      : `- Before submitting, run the named checks locally (${checks.map((c) => `\`${c}\``).join(", ")}; commands are in \`.handoffs/config.json\`).`;
+      : `- Before submitting, run the named checks locally (${checks.map((c) => `\`${c}\``).join(", ")}; commands are in \`.handproof/config.json\`).`;
   return [
     "## How to work",
     "- Stay inside `scope.allowed`; never touch `scope.forbidden`. Files outside scope fail verification.",
