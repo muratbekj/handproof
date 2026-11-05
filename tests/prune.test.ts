@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -17,7 +18,6 @@ import {
   pruneNowEnv,
   seedOldDoneWithLogAndLeftoverPruning,
   seedOldDoneWithTwoLogs,
-  stubAppendEventFailOnLogsPruned,
   touchMtime,
   withPruneClock,
   writeRunLogs,
@@ -470,32 +470,51 @@ describe("handoffs prune (plan criterion 25)", () => {
     }
   });
 
-  test("t-c25: restores x.log and x.log.pruning when logs_pruned append fails", () => {
-    const repo = tmpRepo();
-    try {
-      const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
-      const xLog = path.join(repo.dir, setup.relPaths[0] ?? "");
-      const xLeftover = path.join(repo.dir, setup.relPaths[1] ?? "");
-      const unstub = stubAppendEventFailOnLogsPruned(setup.handle.repo);
-      let failed = false;
+  test(
+    "t-c25: restores x.log and x.log.pruning when logs_pruned append hits db_busy",
+    async () => {
+      const repo = tmpRepo();
       try {
-        setup.handle.service.prune({ olderThanDays: 30, dryRun: false });
-      } catch (err) {
-        failed = true;
-        expect(String(err)).toMatch(/simulated logs_pruned append failure/);
-      } finally {
-        unstub();
-      }
-      expect(failed).toBe(true);
+        const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
+        const xLog = path.join(repo.dir, setup.relPaths[0] ?? "");
+        const xLeftover = path.join(repo.dir, setup.relPaths[1] ?? "");
+        const dbPath = path.join(repo.dir, ".handoffs/handoffs.db");
 
-      expect(fs.readFileSync(xLog, "utf8")).toBe(setup.logContent);
-      expect(fs.readFileSync(xLeftover, "utf8")).toBe(setup.leftoverContent);
-      expect(logsPrunedEvents(setup.handle.repo, setup.id)).toHaveLength(0);
-      setup.handle.close();
-    } finally {
-      repo.cleanup();
-    }
-  });
+        let releaseExclusive: () => void = () => {};
+        const lockHeld = new Promise<void>((resolve) => {
+          releaseExclusive = resolve;
+        });
+
+        const locker = new Database(dbPath, { strict: true });
+        locker.run("PRAGMA busy_timeout = 10000");
+
+        const lockTask = (async () => {
+          locker.run("BEGIN EXCLUSIVE");
+          await lockHeld;
+          locker.run("ROLLBACK");
+          locker.close();
+        })();
+
+        await Bun.sleep(20);
+
+        const result = setup.handle.service.prune({ olderThanDays: 30, dryRun: false });
+        releaseExclusive();
+        await lockTask;
+
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+        expect(result.error.error).toBe("db_busy");
+
+        expect(fs.readFileSync(xLog, "utf8")).toBe(setup.logContent);
+        expect(fs.readFileSync(xLeftover, "utf8")).toBe(setup.leftoverContent);
+        expect(logsPrunedEvents(setup.handle.repo, setup.id)).toHaveLength(0);
+        setup.handle.close();
+      } finally {
+        repo.cleanup();
+      }
+    },
+    15_000,
+  );
 });
 
 describe("README prune (t-ac13)", () => {
