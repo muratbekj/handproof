@@ -11,10 +11,10 @@ import { createServer } from "./server.ts";
 import { openService } from "./service/open.ts";
 import { VERSION } from "./version.ts";
 
-const USAGE = `usage: handoffs <command>
+const USAGE = `usage: handproof <command>
 
 commands:
-  init     create .handoffs/config.json and add runtime files to .gitignore
+  init     create .handproof/config.json and add runtime files to .gitignore
   serve    run the MCP server over stdio
   ls       list handoffs (default: not done or cancelled)
              --all                 include done and cancelled
@@ -22,7 +22,7 @@ commands:
   show <id>  print the markdown brief for one handoff
   review <id> accept|reject [reason...]
              accept a verified handoff (done) or reject it (reopened); reject needs a reason
-  prune    delete check logs (.handoffs/runs/) of done or cancelled handoffs
+  prune    delete check logs (.handproof/runs/) of done or cancelled handoffs
              --older-than <N>d     only handoffs finished at least N days ago (default 30d)
              --dry-run             list what would be deleted; delete nothing
   wait <id> [<id>...]
@@ -37,9 +37,9 @@ options:
 
 function printError(err: unknown): void {
   if (isHandoffsError(err)) {
-    console.error(`handoffs: ${err.code}: ${err.message}`);
+    console.error(`handproof: ${err.code}: ${err.message}`);
   } else {
-    console.error(`handoffs: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    console.error(`handproof: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
   }
 }
 
@@ -59,7 +59,7 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
   const opened = openService({ paths, config, agent });
   const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service }), {
     onerror: (err) => {
-      console.error(`handoffs: ${err.message}`);
+      console.error(`handproof: ${err.message}`);
     },
   });
   // serveStdio closes itself on stdin EOF; resolve then so the caller can finish.
@@ -79,8 +79,8 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
 
 /** The CLI counts as a human (decision 4): default identity human-cli. */
 function cliAgent(env: NodeJS.ProcessEnv): AgentRef {
-  const name = env.HANDOFFS_AGENT?.trim();
-  return resolveAgent(name === undefined || name === "" ? { ...env, HANDOFFS_AGENT: "human-cli" } : env);
+  const name = env.HANDPROOF_AGENT?.trim();
+  return resolveAgent(name === undefined || name === "" ? { ...env, HANDPROOF_AGENT: "human-cli" } : env);
 }
 
 function withService<T>(
@@ -98,7 +98,7 @@ function withService<T>(
 }
 
 function serviceFailure(err: ServiceError): number {
-  console.error(`handoffs: ${err.error}: ${err.message}`);
+  console.error(`handproof: ${err.error}: ${err.message}`);
   return 1;
 }
 
@@ -141,7 +141,7 @@ function cmdLs(args: string[], env: NodeJS.ProcessEnv, cwd: string): number | nu
   const parsed = parseLsArgs(args);
   if (parsed === null) return null;
   if ("error" in parsed) {
-    console.error(`handoffs: validation_failed: ${parsed.error}`);
+    console.error(`handproof: validation_failed: ${parsed.error}`);
     return 1;
   }
   return withService(env, cwd, (service) => {
@@ -175,7 +175,7 @@ function cmdReview(args: string[], env: NodeJS.ProcessEnv, cwd: string): number 
 
 /** Bad arguments: message plus usage on stderr, exit 2. */
 function usageError(message: string): number {
-  console.error(`handoffs: ${message}`);
+  console.error(`handproof: ${message}`);
   process.stderr.write(USAGE);
   return 2;
 }
@@ -325,7 +325,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, cwd: string):
     printError(err);
     return 1;
   }
-  if (cmd !== undefined) console.error(`handoffs: unknown command or arguments: ${argv.join(" ")}`);
+  if (cmd !== undefined) console.error(`handproof: unknown command or arguments: ${argv.join(" ")}`);
   process.stderr.write(USAGE);
   return 2;
 }

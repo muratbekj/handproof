@@ -226,7 +226,7 @@ describe("pre-existing scope exclusions (PLAN Step 1 acceptance)", () => {
       const repo = tmpRepo();
       try {
         initRepoWithPreexistingDirty(repo, undefined, { skipPackageJson: true, skipNotes: true });
-        const configPath = path.join(repo.dir, ".handoffs", "config.json");
+        const configPath = path.join(repo.dir, ".handproof", "config.json");
         fs.writeFileSync(
           configPath,
           `${JSON.stringify({ leaseMinutes: 31, checks: { test: { run: "test -f src/auth/ok.txt", timeoutSec: 120 } } }, null, 2)}\n`,
@@ -250,15 +250,15 @@ describe("pre-existing scope exclusions (PLAN Step 1 acceptance)", () => {
         });
         expect(unchanged.ok).toBe(true);
         if (!unchanged.ok) return;
-        expect(unchanged.value.verification.scope.ignored).toContain(".handoffs/config.json");
+        expect(unchanged.value.verification.scope.ignored).toContain(".handproof/config.json");
 
         fs.writeFileSync(configPath, '{"leaseMinutes":99,"checks":{}}\n');
         const touched = await worker.service.verify(id);
         expect(touched.ok).toBe(true);
         if (!touched.ok) return;
         expect(touched.value.verification.scope.violations).toContainEqual({
-          path: ".handoffs/config.json",
-          rule: "protected: .handoffs/config.json",
+          path: ".handproof/config.json",
+          rule: "protected: .handproof/config.json",
         });
         worker.close();
       } finally {

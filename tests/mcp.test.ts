@@ -245,9 +245,9 @@ describe("MCP tools and resources", () => {
     try {
       initRepoHandoffs(repo);
       const env = testEnv({
-        HANDOFFS_REPO: repo.dir,
-        HANDOFFS_AGENT: AGENTS.cursorImpl.name,
-        HANDOFFS_HARNESS: AGENTS.cursorImpl.harness,
+        HANDPROOF_REPO: repo.dir,
+        HANDPROOF_AGENT: AGENTS.cursorImpl.name,
+        HANDPROOF_HARNESS: AGENTS.cursorImpl.harness,
       });
 
       const stderrChunks: string[] = [];

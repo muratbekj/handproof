@@ -12,7 +12,7 @@ export function looseInput<T extends z.ZodType>(schema: T): T {
   return {
     "~standard": {
       version: 1 as const,
-      vendor: "handoffs",
+      vendor: "handproof",
       jsonSchema,
       validate: (data: unknown) => ({ value: data ?? {} }),
     },

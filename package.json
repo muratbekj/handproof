@@ -1,16 +1,16 @@
 {
-  "name": "handoffs-mcp",
+  "name": "handproof",
   "version": "0.0.1",
   "description": "A typed, verifiable handoff contract between coding agents over MCP",
   "license": "MIT",
   "author": "muratbekj",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/muratbekj/handsoff-mcp.git"
+    "url": "git+https://github.com/muratbekj/handproof.git"
   },
-  "homepage": "https://github.com/muratbekj/handsoff-mcp#readme",
+  "homepage": "https://github.com/muratbekj/handproof#readme",
   "bugs": {
-    "url": "https://github.com/muratbekj/handsoff-mcp/issues"
+    "url": "https://github.com/muratbekj/handproof/issues"
   },
   "keywords": [
     "mcp",
@@ -23,8 +23,7 @@
   ],
   "type": "module",
   "bin": {
-    "handoffs-mcp": "./dist/bin.js",
-    "handoffs": "./dist/bin.js"
+    "handproof": "./dist/bin.js"
   },
   "files": [
     "dist",

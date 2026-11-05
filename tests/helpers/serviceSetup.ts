@@ -29,7 +29,7 @@ export interface ServiceHandle {
 export function initRepoHandoffs(repo: TmpRepo): RepoPaths {
   const paths = resolveRepo({
     cwd: repo.dir,
-    env: testEnv({ HANDOFFS_REPO: repo.dir }),
+    env: testEnv({ HANDPROOF_REPO: repo.dir }),
   });
   runInit(paths);
   return paths;
@@ -56,15 +56,15 @@ export const AGENTS = {
 
 export function agentEnv(agent: AgentRef): Record<string, string | undefined> {
   return testEnv({
-    HANDOFFS_AGENT: agent.name,
-    HANDOFFS_HARNESS: agent.harness,
+    HANDPROOF_AGENT: agent.name,
+    HANDPROOF_HARNESS: agent.harness,
   });
 }
 
 export function resolvePaths(repo: TmpRepo, env: Record<string, string | undefined>): RepoPaths {
   return resolveRepo({
     cwd: repo.dir,
-    env: { ...env, HANDOFFS_REPO: repo.dir },
+    env: { ...env, HANDPROOF_REPO: repo.dir },
   });
 }
 
@@ -77,5 +77,5 @@ export function resolveAgentFromRepo(
   repo: TmpRepo,
   env: Record<string, string | undefined>,
 ): AgentRef {
-  return resolveAgent({ ...env, HANDOFFS_REPO: repo.dir });
+  return resolveAgent({ ...env, HANDPROOF_REPO: repo.dir });
 }

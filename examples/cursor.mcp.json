@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "handoffs": {
+    "handproof": {
       "command": "bunx",
-      "args": ["handoffs-mcp", "serve"],
+      "args": ["handproof", "serve"],
       "env": {
-        "HANDOFFS_AGENT": "cursor-impl",
-        "HANDOFFS_HARNESS": "cursor"
+        "HANDPROOF_AGENT": "cursor-impl",
+        "HANDPROOF_HARNESS": "cursor"
       }
     }
   }

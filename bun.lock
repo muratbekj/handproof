@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "handoffs-mcp",
+      "name": "handproof",
       "dependencies": {
         "@modelcontextprotocol/server": "2.4.0",
         "picomatch": "4.0.7",

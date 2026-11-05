@@ -51,7 +51,7 @@ async function runPrune(repoDir: string, argv: string[]) {
   return captureStdoutStderr(() => main(["prune", ...argv], pruneNowEnv(repoDir), repoDir));
 }
 
-describe("handoffs prune (plan acceptance 1–13)", () => {
+describe("handproof prune (plan acceptance 1–13)", () => {
   test("t-ac1: old done handoff with two log files", async () => {
     const repo = tmpRepo();
     try {
@@ -172,7 +172,7 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
       seedOldDoneWithTwoLogs(repo).handle.close();
       const { code, out } = await runPrune(repo.dir, ["--dry-run"]);
       expect(code).toBe(0);
-      expect(out).toContain("would prune  .handoffs/runs/");
+      expect(out).toContain("would prune  .handproof/runs/");
       expect(out).toMatch(/would prune 2 files/);
       const reader = withPruneClock((now) => openTestService(repo, AGENTS.planner, now));
       const done = reader.service.list({ status: ["done"] });
@@ -223,8 +223,8 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
         touchMtime(newInMixed, PRUNE_NOW);
       });
       await runPrune(repo.dir, []);
-      expect(fs.existsSync(path.join(repo.dir, ".handoffs/runs/h_gone"))).toBe(false);
-      expect(fs.existsSync(path.join(repo.dir, ".handoffs/runs/h_mixed/new.log"))).toBe(true);
+      expect(fs.existsSync(path.join(repo.dir, ".handproof/runs/h_gone"))).toBe(false);
+      expect(fs.existsSync(path.join(repo.dir, ".handproof/runs/h_mixed/new.log"))).toBe(true);
     } finally {
       repo.cleanup();
     }
@@ -250,7 +250,7 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
       });
       await runPrune(repo.dir, []);
       expect(fs.readFileSync(path.join(repo.dir, "outside-target.txt"), "utf8")).toBe("keep me\n");
-      expect(fs.existsSync(path.join(repo.dir, ".handoffs/runs/stray-root.log"))).toBe(true);
+      expect(fs.existsSync(path.join(repo.dir, ".handproof/runs/stray-root.log"))).toBe(true);
     } finally {
       repo.cleanup();
     }
@@ -400,7 +400,7 @@ describe("handoffs prune (plan acceptance 1–13)", () => {
   });
 });
 
-describe("handoffs prune (plan criterion 25)", () => {
+describe("handproof prune (plan criterion 25)", () => {
   function expectCriterion25Prune(opts: {
     repoDir: string;
     handle: ReturnType<typeof seedOldDoneWithLogAndLeftoverPruning>["handle"];
@@ -416,7 +416,7 @@ describe("handoffs prune (plan criterion 25)", () => {
     for (const rel of opts.relPaths) {
       expect(fs.existsSync(path.join(opts.repoDir, rel))).toBe(false);
     }
-    expect(fs.existsSync(path.join(opts.repoDir, ".handoffs/runs", opts.id))).toBe(false);
+    expect(fs.existsSync(path.join(opts.repoDir, ".handproof/runs", opts.id))).toBe(false);
     const events = logsPrunedEvents(opts.handle.repo, opts.id);
     expect(events).toHaveLength(1);
     const data = events[0]?.data as { paths?: string[]; bytes?: number };
@@ -478,7 +478,7 @@ describe("handoffs prune (plan criterion 25)", () => {
         const setup = seedOldDoneWithLogAndLeftoverPruning(repo);
         const xLog = path.join(repo.dir, setup.relPaths[0] ?? "");
         const xLeftover = path.join(repo.dir, setup.relPaths[1] ?? "");
-        const dbPath = path.join(repo.dir, ".handoffs/handoffs.db");
+        const dbPath = path.join(repo.dir, ".handproof/handoffs.db");
 
         let releaseExclusive: () => void = () => {};
         const lockHeld = new Promise<void>((resolve) => {
@@ -518,9 +518,9 @@ describe("handoffs prune (plan criterion 25)", () => {
 });
 
 describe("README prune (t-ac13)", () => {
-  test("README documents handoffs prune with log retention and 30-day default", () => {
+  test("README documents handproof prune with log retention and 30-day default", () => {
     const readme = fs.readFileSync(path.join(import.meta.dir, "..", "README.md"), "utf8");
-    const pruneIdx = readme.indexOf("handoffs prune");
+    const pruneIdx = readme.indexOf("handproof prune");
     expect(pruneIdx).toBeGreaterThanOrEqual(0);
     const window = readme.slice(pruneIdx, pruneIdx + 400);
     expect(window.toLowerCase()).toContain("log");

@@ -110,7 +110,7 @@ describe("handoff prompt keeps the planner from doing the task", () => {
     try {
       const paths = initRepoHandoffs(repo);
       await withClient(paths, AGENTS.planner, async (client) => {
-        const p = await client.getPrompt({ name: "handoff", arguments: {} });
+        const p = await client.getPrompt({ name: "create", arguments: {} });
         const text = textOf(p.messages[0]?.content);
         expect(text).toContain("## Don't do the task yourself");
         expect(text).toMatch(/Don't edit, create or delete files for this task/);
@@ -131,5 +131,25 @@ describe("README covers clients without prompt support", () => {
   });
   test("quickstart tells the planner not to write code", () => {
     expect(readme).toMatch(/Don't write any code, I'm handing this off/);
+  });
+});
+
+describe("README is not tied to one app", () => {
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  test("every examples/ file the README links exists", () => {
+    const links = [...readme.matchAll(/\]\((examples\/[^)]+)\)/g)].map((m) => m[1] ?? "");
+    expect(links.length).toBeGreaterThan(0);
+    for (const l of links) expect(fs.existsSync(new URL(`../${l}`, import.meta.url))).toBe(true);
+  });
+  test("Codex setup is documented with its own agent name and project config", () => {
+    expect(readme).toContain("examples/codex.md");
+    const codex = fs.readFileSync(new URL("../examples/codex.md", import.meta.url), "utf8");
+    expect(codex).toContain("[mcp_servers.handproof]");
+    expect(codex).toContain("HANDPROOF_AGENT");
+    expect(codex).toContain("HANDPROOF_HARNESS=codex");
+  });
+  test("roles are described by what an agent does, not by app", () => {
+    expect(readme).toMatch(/Planner:\*\* creates a handoff/);
+    expect(readme).toMatch(/Several sessions of the same app/);
   });
 });

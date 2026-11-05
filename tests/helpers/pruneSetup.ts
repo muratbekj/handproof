@@ -21,8 +21,8 @@ export const RECENT_UPDATED_AT = isoDaysBefore(PRUNE_NOW, 29);
 
 export function pruneNowEnv(repoDir: string): Record<string, string | undefined> {
   return testEnv({
-    HANDOFFS_REPO: repoDir,
-    HANDOFFS_NOW: PRUNE_NOW.toISOString(),
+    HANDPROOF_REPO: repoDir,
+    HANDPROOF_NOW: PRUNE_NOW.toISOString(),
   });
 }
 
@@ -45,7 +45,7 @@ export function writeRunLogs(
     const abs = path.join(dir, name);
     fs.writeFileSync(abs, contents?.[i] ?? `log body for ${name}\n`);
     absPaths.push(abs);
-    relPaths.push(`.handoffs/runs/${handoffId}/${name}`);
+    relPaths.push(`.handproof/runs/${handoffId}/${name}`);
   });
   return { absPaths, relPaths };
 }
@@ -113,7 +113,7 @@ export function seedOldDoneWithLogAndLeftoverPruning(repo: TmpRepo): {
     const leftoverContent = "leftover from interrupted prune\n";
     fs.writeFileSync(path.join(dir, "x.log"), logContent);
     fs.writeFileSync(path.join(dir, "x.log.pruning"), leftoverContent);
-    const relPaths = [`.handoffs/runs/${id}/x.log`, `.handoffs/runs/${id}/x.log.pruning`];
+    const relPaths = [`.handproof/runs/${id}/x.log`, `.handproof/runs/${id}/x.log.pruning`];
     return { handle, id, relPaths, logContent, leftoverContent };
   });
 }

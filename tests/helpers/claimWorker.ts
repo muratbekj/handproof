@@ -10,9 +10,9 @@ if (repoPath === undefined || agentName === undefined || handoffIdArg === undefi
 const harness = agentName.includes("cursor") ? "cursor" : "claude-code";
 const env: Record<string, string | undefined> = {
   ...process.env,
-  HANDOFFS_REPO: repoPath,
-  HANDOFFS_AGENT: agentName,
-  HANDOFFS_HARNESS: harness,
+  HANDPROOF_REPO: repoPath,
+  HANDPROOF_AGENT: agentName,
+  HANDPROOF_HARNESS: harness,
 };
 
 const paths = resolveRepo({ cwd: repoPath, env });

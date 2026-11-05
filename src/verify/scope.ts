@@ -21,8 +21,8 @@ export interface Violation {
   rule: string;
 }
 
-/** Always judged, even though they live under .handoffs/: editing them could weaken the checks. */
-export const PROTECTED_PATHS: readonly string[] = Object.freeze([".handoffs/config.json"]);
+/** Always judged, even though they live under .handproof/: editing them could weaken the checks. */
+export const PROTECTED_PATHS: readonly string[] = Object.freeze([".handproof/config.json"]);
 
 const NO_CHANGE_KINDS: readonly Kind[] = ["review", "investigate"];
 
@@ -56,7 +56,7 @@ function nulList(out: Buffer): string[] {
 }
 
 function isRuntimeFile(p: string): boolean {
-  return (p === ".handoffs" || p.startsWith(".handoffs/")) && !PROTECTED_PATHS.includes(p);
+  return (p === ".handproof" || p.startsWith(".handproof/")) && !PROTECTED_PATHS.includes(p);
 }
 
 /** The recorded base when it is a commit and an ancestor of HEAD; otherwise merge-base(branch, HEAD). */
@@ -157,7 +157,7 @@ function splitPreexisting(cwd: string, files: string[], preexisting: Preexisting
 
 /**
  * Files changed in the worktree at `cwd` since the base: committed, staged, unstaged and untracked
- * (ignored files excluded). Runtime files under .handoffs/ are dropped except PROTECTED_PATHS.
+ * (ignored files excluded). Runtime files under .handproof/ are dropped except PROTECTED_PATHS.
  * Pre-existing changes whose blob is unchanged move to `ignored` (protected paths included: an
  * unchanged config is not an edit, a changed one is caught).
  * Never returns "no changes" for an unusable base: throws scope_base_unavailable instead.

@@ -28,7 +28,7 @@ export function initPhase2Repo(repo: TmpRepo, config: Config = PHASE2_CONFIG) {
   const paths = initRepoHandoffs(repo);
   writeConfig(paths, config);
   fs.mkdirSync(path.join(repo.dir, "src", "auth"), { recursive: true });
-  repo.git(["add", ".gitignore", ".handoffs/config.json"]);
+  repo.git(["add", ".gitignore", ".handproof/config.json"]);
   repo.git(["commit", "-m", "track handoffs setup"]);
   return paths;
 }

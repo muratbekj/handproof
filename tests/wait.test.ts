@@ -266,7 +266,7 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
     }
   });
 
-  test("t-ac20: CLI handoffs wait --timeout 1s exits 124", async () => {
+  test("t-ac20: CLI handproof wait --timeout 1s exits 124", async () => {
     const repo = tmpRepo();
     try {
       initPhase2Repo(repo);
@@ -282,9 +282,9 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
       worker.close();
 
       const env = testEnv({
-        HANDOFFS_REPO: repo.dir,
-        HANDOFFS_AGENT: "human-cli",
-        HANDOFFS_HARNESS: "other",
+        HANDPROOF_REPO: repo.dir,
+        HANDPROOF_AGENT: "human-cli",
+        HANDPROOF_HARNESS: "other",
       });
 
       const proc = Bun.spawn(["bun", BIN, "wait", id, "--timeout", "1s"], {
@@ -307,7 +307,7 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
     const repo = tmpRepo();
     try {
       initPhase2Repo(repo);
-      const env = testEnv({ HANDOFFS_REPO: repo.dir });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir });
 
       const noIds = await captureStdoutStderr(() => main(["wait"], env, repo.dir));
       expect(noIds.code).toBe(2);
@@ -384,7 +384,7 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
   });
 });
 
-describe("handoffs wait CLI (t-ac23)", () => {
+describe("handproof wait CLI (t-ac23)", () => {
   test("subprocess exits 0 when handoff becomes verified; SIGINT exits 130", async () => {
     const repo = tmpRepo();
     try {
@@ -401,9 +401,9 @@ describe("handoffs wait CLI (t-ac23)", () => {
       worker.close();
 
       const env = testEnv({
-        HANDOFFS_REPO: repo.dir,
-        HANDOFFS_AGENT: "human-cli",
-        HANDOFFS_HARNESS: "other",
+        HANDPROOF_REPO: repo.dir,
+        HANDPROOF_AGENT: "human-cli",
+        HANDPROOF_HARNESS: "other",
       });
 
       const proc = Bun.spawn(["bun", BIN, "wait", id, "--until", "verified"], {
@@ -444,7 +444,7 @@ describe("handoffs wait CLI (t-ac23)", () => {
 
         const waiter = Bun.spawn(["bun", BIN, "wait", id2], {
           cwd: repo2.dir,
-          env: testEnv({ HANDOFFS_REPO: repo2.dir }),
+          env: testEnv({ HANDPROOF_REPO: repo2.dir }),
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -461,9 +461,9 @@ describe("handoffs wait CLI (t-ac23)", () => {
 });
 
 describe("README wait (t-ac24)", () => {
-  test("README lists handoffs wait with --until and --timeout", () => {
+  test("README lists handproof wait with --until and --timeout", () => {
     const readme = fs.readFileSync(path.join(import.meta.dir, "..", "README.md"), "utf8");
-    expect(readme).toContain("handoffs wait");
+    expect(readme).toContain("handproof wait");
     expect(readme).toContain("--until");
     expect(readme).toContain("--timeout");
   });
