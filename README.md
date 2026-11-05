@@ -2,14 +2,14 @@
 
 A typed, verifiable handoff contract between coding agents over MCP. One agent packages a task (goal, context, scope, acceptance criteria), another claims it, and the server checks the result before anyone can accept it.
 
-<!-- demo.gif goes here (T16) -->
-
-The demo shows Claude Code handing a task to Cursor, Cursor's out-of-scope `package.json` edit being caught by verification, the fix, and the accept.
+<!-- demo.gif goes here (T16): Claude Code hands a task to Cursor, Cursor's out-of-scope package.json edit is caught by verification, the fix, the accept. -->
 
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.4 and git.
 - Run it with `bunx`, not `npx`: the server and CLI run on Bun (they use `bun:sqlite`).
+
+> **Not on npm yet.** Until it is, run it from source: `git clone https://github.com/muratbekj/handproof && cd handproof && bun install`, then use `bun /abs/path/to/handproof/src/bin.ts` wherever this README says `bunx handproof`.
 
 ## Quickstart
 
@@ -192,6 +192,9 @@ Check logs grow with every verification run, up to 1 MiB per check run, under `.
 
 - **Verification runs in the calling agent's worktree.** Checks and the scope diff run where the agent that submits (or calls `handoff_verify`) is checked out. If the implementer works in a different worktree from the reviewer, the reviewer's `handoff_verify` checks the reviewer's files.
 - **A process that escapes its process group can outlive a timeout.** On timeout the whole process group is killed, but a check that starts a grandchild with `setsid()` puts it in a new session the kill doesn't reach.
+- **Files in scope can weaken a check.** Checks run the implementer's checkout, so if `scope.allowed` covers what a check runs (`package.json` scripts, test files, test config), an implementer could make it pass trivially. Scope is the only guard: keep those files out of `scope.allowed` unless the task is about them.
+- **Checks prove only what they run.** Acceptance items without a `check` are the agent's own report (`result.criteria`). Read the diff before accepting.
+- **A review handoff ends `verified` whenever its checks pass,** even if the reviewer's verdict is CHANGES NEEDED. The verdict lives in `result.summary`; read it before accepting.
 - **Windows is untested.** Paths are normalized to POSIX internally, but CI runs on macOS and Linux only.
 
 ## Manual cross-harness check
