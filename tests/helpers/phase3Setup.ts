@@ -14,7 +14,7 @@ export function initRepoWithPreexistingDirty(
   const paths = initRepoHandoffs(repo);
   writeConfig(paths, config);
   fs.mkdirSync(path.join(repo.dir, "src", "auth"), { recursive: true });
-  repo.git(["add", ".gitignore", ".handoffs/config.json"]);
+  repo.git(["add", ".gitignore", ".handproof/config.json"]);
   repo.git(["commit", "-m", "track handoffs setup"]);
   if (!opts.skipPackageJson) {
     fs.writeFileSync(

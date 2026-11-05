@@ -1,4 +1,4 @@
-# handoffs-mcp
+# handproof
 
 A typed, verifiable handoff contract between coding agents over MCP. One agent packages a task (goal, context, scope, acceptance criteria), another claims it, and the server checks the result before anyone can accept it.
 
@@ -13,36 +13,60 @@ The demo shows Claude Code handing a task to Cursor, Cursor's out-of-scope `pack
 
 ## Quickstart
 
+handproof doesn't care which app plays which role. Every session gets an agent name (`HANDPROOF_AGENT`), and roles come from what that agent does:
+
+- **Planner:** creates a handoff. It's the handoff's creator, so it (or a human) also reviews it.
+- **Implementer:** claims the handoff, does the work and submits it. The server then runs the checks.
+
+Any MCP client can take either role: Claude Code, Cursor, Codex, or several sessions of the same app. The steps below work for all of them; [Connect your agents](#connect-your-agents) shows the setup for each app.
+
 In the repository you want to share handoffs in:
 
 ```bash
-bunx handoffs-mcp init
-$EDITOR .handoffs/config.json
-claude mcp add handoffs -e HANDOFFS_AGENT=planner -e HANDOFFS_HARNESS=claude-code -- bunx handoffs-mcp serve
-mkdir -p .cursor && $EDITOR .cursor/mcp.json
+bunx handproof init
+$EDITOR .handproof/config.json
 ```
 
-1. `init` writes `.handoffs/config.json` and adds the runtime files to `.gitignore`.
+1. `init` writes `.handproof/config.json` and adds the runtime files to `.gitignore`.
 2. Set the commands your checks run (`test`, `typecheck`, `lint`, …) and commit the config.
-3. Register the server in Claude Code as agent `planner` (more in [`examples/claude-code.md`](examples/claude-code.md)).
-4. Register it in Cursor as agent `cursor-impl`, in `.cursor/mcp.json` (same as [`examples/cursor.mcp.json`](examples/cursor.mcp.json)):
-   ```json
-   {
-     "mcpServers": {
-       "handoffs": {
-         "command": "bunx",
-         "args": ["handoffs-mcp", "serve"],
-         "env": { "HANDOFFS_AGENT": "cursor-impl", "HANDOFFS_HARNESS": "cursor" }
-       }
-     }
-   }
-   ```
-5. In Claude Code, describe the task in chat and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run `/mcp__handoffs__handoff`. Claude Code passes only one word per prompt argument, so type the task in chat, not after the command. If you don't say "don't write code", Claude Code may start doing the task itself.
-6. In Cursor, pick the handoff up:
-   - **Cursor editor:** run the handoffs `pickup` prompt from the chat's `/` menu.
-   - **Cursor Agent CLI** (`cursor-agent`): it doesn't support MCP prompts, so ask it to *"call the handoffs `handoff_claim` tool"*. The reply has the same brief, working rules and `handoff_submit` call as `pickup`.
+3. Connect each session with its own agent name, for example a planner and an implementer ([Connect your agents](#connect-your-agents)).
+4. **Planner session:** describe the task and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run the `create` prompt (`/mcp__handproof__create` in Claude Code). In apps without prompt support, ask it to *"call the handproof `handoff_create` tool"*. If you don't say "don't write code", the agent may start doing the task itself.
+5. **Implementer session:** run the `pickup` prompt, or ask it to *"call the handproof `handoff_claim` tool"*. The reply has the brief, the working rules and the exact `handoff_submit` call to make when done. The implementer works inside the scope and submits; the server runs the checks and the scope check.
+6. **Review:** in the planner's session run the `review` prompt (or ask it to call `handoff_review`), or review from any terminal with `handproof review <id> accept` (the CLI counts as a human).
 
-   Cursor works inside the scope and calls `handoff_submit`. Back in Claude Code, run `/mcp__handoffs__review` to accept or reject the verified result.
+## Connect your agents
+
+| App | Register the server | Prompts |
+| --- | --- | --- |
+| Claude Code | `claude mcp add handproof -e HANDPROOF_AGENT=planner -e HANDPROOF_HARNESS=claude-code -- bunx handproof serve` ([`examples/claude-code.md`](examples/claude-code.md)) | Yes: `/mcp__handproof__create`, `/mcp__handproof__pickup`, `/mcp__handproof__review`. One word per argument, so type the task in chat, not after the command. |
+| Cursor editor | `.cursor/mcp.json` in the repo ([`examples/cursor.mcp.json`](examples/cursor.mcp.json)) | In the chat's `/` menu (not yet verified by us) |
+| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | No. Cursor Agent CLI doesn't request MCP prompts; ask it to call `handoff_claim` (or `handoff_create`) instead |
+| Codex CLI | `codex mcp add handproof --env HANDPROOF_AGENT=codex-impl --env HANDPROOF_HARNESS=codex -- bunx handproof serve`, or a project `.codex/config.toml` ([`examples/codex.md`](examples/codex.md)) | Codex documents MCP tools, not prompts: ask it to call the tools |
+| Anything else | any MCP client that starts a stdio server: `bunx handproof serve` with `HANDPROOF_AGENT` set | Use the tools |
+
+`.cursor/mcp.json` for an implementer named `cursor-impl`:
+
+```json
+{
+  "mcpServers": {
+    "handproof": {
+      "command": "bunx",
+      "args": ["handproof", "serve"],
+      "env": { "HANDPROOF_AGENT": "cursor-impl", "HANDPROOF_HARNESS": "cursor" }
+    }
+  }
+}
+```
+
+### Several sessions of the same app
+
+Two Codex sessions, or two Claude Code sessions, work the same way as two different apps: each needs its own agent name.
+
+- Give each session its own git worktree (`git worktree add ../myrepo-impl`). All worktrees of a repo share one handproof database, and each submit is checked in the implementer's own worktree, so parallel sessions don't see each other's changes.
+- Put each session's config in its worktree: `.cursor/mcp.json`, `.codex/config.toml` (Codex reads it in trusted projects), or for Claude Code run `claude mcp add …` inside that worktree (its default scope is the current directory).
+- Add those config folders (`.cursor/`, `.codex/`) to `.gitignore`. The scope check counts untracked files that aren't ignored, so a stray per-worktree config would fail a submit.
+
+Example: Codex only, planner `codex-planner` in the main checkout and implementer `codex-impl` in `../myrepo-impl`, each with its own `.codex/config.toml`; you review with `handproof review <id> accept`.
 
 ## How it works
 
@@ -63,11 +87,11 @@ Every handoff moves through seven states:
 - The only path to `done` runs through `verified`: an accept is refused on anything that hasn't passed verification.
 - Verification runs automatically on `handoff_submit`: each check named by an acceptance item, then a scope check of every file changed since the handoff's base commit (committed, staged, unstaged and untracked). Uncommitted changes that already existed when the handoff was created are recorded with their content hash and ignored unless they change afterwards.
 - Leases (default 30 minutes) are renewed by any call the claimant makes; a lapsed lease reopens the handoff.
-- All state lives in one SQLite file per repository, `.handoffs/handoffs.db`. Each harness starts its own stdio server process and every process for the same repo shares that file. There is no daemon.
+- All state lives in one SQLite file per repository, `.handproof/handoffs.db`. Each harness starts its own stdio server process and every process for the same repo shares that file. There is no daemon.
 
 ## Config reference
 
-`.handoffs/config.json`, read from disk on every verification. A missing file means the defaults with no checks.
+`.handproof/config.json`, read from disk on every verification. A missing file means the defaults with no checks.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -93,9 +117,9 @@ Environment variables, set per harness in its MCP config:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HANDOFFS_AGENT` | `anonymous` (`human-cli` for the CLI) | Agent name. Processes with the same name are the same agent. Names starting with `human` are humans: they may claim, review or cancel any handoff |
-| `HANDOFFS_HARNESS` | `other` | `claude-code`, `cursor`, `codex` or `other` |
-| `HANDOFFS_REPO` | the server's working directory | Path to the repository, when the harness starts the server elsewhere |
+| `HANDPROOF_AGENT` | `anonymous` (`human-cli` for the CLI) | Agent name. Processes with the same name are the same agent. Names starting with `human` are humans: they may claim, review or cancel any handoff |
+| `HANDPROOF_HARNESS` | `other` | `claude-code`, `cursor`, `codex` or `other` |
+| `HANDPROOF_REPO` | the server's working directory | Path to the repository, when the harness starts the server elsewhere |
 
 ## Tools, resources, prompts
 
@@ -123,43 +147,42 @@ Environment variables, set per harness in its MCP config:
 
 ### Prompts
 
-In Claude Code the prompts are `/mcp__handoffs__handoff`, `/mcp__handoffs__pickup` and `/mcp__handoffs__review`. Every argument is optional and a single word. Clients without prompt support (such as the Cursor Agent CLI) can use the tools directly: `handoff_claim`'s reply ends with the same working rules and `handoff_submit` call that `pickup` gives.
+In Claude Code the prompts are `/mcp__handproof__create`, `/mcp__handproof__pickup` and `/mcp__handproof__review`. Every argument is optional and a single word. Clients without prompt support (such as the Cursor Agent CLI) can use the tools directly: `handoff_claim`'s reply ends with the same working rules and `handoff_submit` call that `pickup` gives.
 
 | Prompt | Arguments | Effect |
 | --- | --- | --- |
-| `handoff` | `request` | No side effect. Tells the agent to package the task from the conversation into one `handoff_create` call, listing the configured checks and the kinds |
+| `create` | `request` | No side effect. Tells the agent to package the task from the conversation into one `handoff_create` call, listing the configured checks and the kinds |
 | `pickup` | `id` | **Claims**: returns the handoff you already hold, or claims the next one (or `id`), with its brief, working rules and the exact `handoff_submit` call |
 | `review` | `id`, `decision` (`accept` or `reject`) | No side effect. Shows a verified handoff you may review and the `handoff_review` call to make; a reject reason comes from the chat |
 
 ## CLI
 
-The CLI acts as `human-cli` unless `HANDOFFS_AGENT` is set.
+The CLI acts as `human-cli` unless `HANDPROOF_AGENT` is set.
 
 ```bash
-handoffs-mcp init                               # write .handoffs/config.json and .gitignore lines
-handoffs-mcp serve                              # run the MCP server over stdio
-handoffs ls [--all] [--status open,claimed]     # table of handoffs
-handoffs show <id>                              # markdown brief
-handoffs review <id> accept|reject [reason...]  # accept or reject a verified handoff
-handoffs prune [--older-than 30d] [--dry-run]   # delete old check logs of done/cancelled handoffs
-handoffs wait <id>... [--until verified,changes_requested] [--timeout 30m]
+handproof init                               # write .handproof/config.json and .gitignore lines
+handproof serve                              # run the MCP server over stdio
+handproof ls [--all] [--status open,claimed]     # table of handoffs
+handproof show <id>                              # markdown brief
+handproof review <id> accept|reject [reason...]  # accept or reject a verified handoff
+handproof prune [--older-than 30d] [--dry-run]   # delete old check logs of done/cancelled handoffs
+handproof wait <id>... [--until verified,changes_requested] [--timeout 30m]
                                                 # block until a status changes (or reaches --until)
 ```
 
-`handoffs` and `handoffs-mcp` are the same binary.
 
-`handoffs prune` deletes the check log files under `.handoffs/runs/<id>/` of handoffs that are `done` or `cancelled` and finished at least 30 days ago (`--older-than <N>d` changes that; `0d` prunes all of them). `--dry-run` lists what would be deleted and deletes nothing. Each pruned handoff gets a `logs_pruned` event, and its brief shows `log pruned` instead of the log path. Run directories without a handoff (e.g. after deleting the database) are removed once all their files are older than the cutoff. Handoff rows and events are never deleted.
+`handproof prune` deletes the check log files under `.handproof/runs/<id>/` of handoffs that are `done` or `cancelled` and finished at least 30 days ago (`--older-than <N>d` changes that; `0d` prunes all of them). `--dry-run` lists what would be deleted and deletes nothing. Each pruned handoff gets a `logs_pruned` event, and its brief shows `log pruned` instead of the log path. Run directories without a handoff (e.g. after deleting the database) are removed once all their files are older than the cutoff. Handoff rows and events are never deleted.
 
-`handoffs wait` polls the database once a second (no tokens spent while it waits) and prints `<id> <status>` for each handoff that met the condition. Without `--until` it returns when any given handoff's status differs from its status at start; with `--until <s>[,<s>]` it returns when one is in that set (immediately if one already is). Each poll first expires lapsed leases, so a crashed claimant doesn't leave it hanging. `--timeout <N>s|<N>m|<N>h` gives up after that long: every id is printed with `(timeout)` and the exit code is 124. Ctrl-C exits with 130.
+`handproof wait` polls the database once a second (no tokens spent while it waits) and prints `<id> <status>` for each handoff that met the condition. Without `--until` it returns when any given handoff's status differs from its status at start; with `--until <s>[,<s>]` it returns when one is in that set (immediately if one already is). Each poll first expires lapsed leases, so a crashed claimant doesn't leave it hanging. `--timeout <N>s|<N>m|<N>h` gives up after that long: every id is printed with `(timeout)` and the exit code is 124. Ctrl-C exits with 130.
 
 ### Disk usage
 
-Check logs grow with every verification run, up to 1 MiB per check run, under `.handoffs/runs/`. Use `handoffs prune` to remove old ones (default: older than 30 days). The database stays small and is never pruned.
+Check logs grow with every verification run, up to 1 MiB per check run, under `.handproof/runs/`. Use `handproof prune` to remove old ones (default: older than 30 days). The database stays small and is never pruned.
 
 ## Security
 
-- A handoff never carries a shell command. It can only name a check defined in `.handoffs/config.json`, which the repo owner commits. Checks run without a shell, with a timeout, and with output capped at the last 1 MiB per run (logged under `.handoffs/runs/`).
-- `.handoffs/config.json` is protected: an implementer who edits it fails the scope check.
+- A handoff never carries a shell command. It can only name a check defined in `.handproof/config.json`, which the repo owner commits. Checks run without a shell, with a timeout, and with output capped at the last 1 MiB per run (logged under `.handproof/runs/`).
+- `.handproof/config.json` is protected: an implementer who edits it fails the scope check.
 - Handoff text from another agent is wrapped in a labelled `<handoff-data>` block that says it is data, not instructions. Text inside it can't close or open that block.
 - Before a handoff, result or note is stored, it is scanned for obvious secrets (AWS keys, `sk-` tokens, GitHub tokens, private key headers) and refused with the matching path.
 - Paths and scope globs are normalized to repo-relative POSIX paths and rejected if they resolve outside the repo.
@@ -176,7 +199,7 @@ Check logs grow with every verification run, up to 1 MiB per check run, under `.
 Run by a human; not automated.
 
 1. Configure both harnesses in the same repo: Claude Code as `planner` and Cursor as `cursor-impl` (see [`examples/`](examples/)).
-2. In Claude Code, describe a small task, say not to write code because it's being handed off, and run `/mcp__handoffs__handoff`; the agent calls `handoff_create`. Note the returned id.
+2. In Claude Code, describe a small task, say not to write code because it's being handed off, and run `/mcp__handproof__create`; the agent calls `handoff_create`. Note the returned id.
 3. In Cursor, call `handoff_list`; the same id appears.
 4. In Cursor, call `handoff_claim` with that id (or, in the Cursor editor, run the `pickup` prompt); it returns `claimed`, the markdown brief and the `handoff_submit` call to make.
-5. In a terminal, run `handoffs show <id>`; it shows the handoff claimed by `cursor-impl`.
+5. In a terminal, run `handproof show <id>`; it shows the handoff claimed by `cursor-impl`.

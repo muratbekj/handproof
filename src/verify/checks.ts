@@ -13,7 +13,7 @@ export interface CheckResult {
   timedOut: boolean;
   truncated: boolean;
   durationMs: number;
-  /** Repo-relative POSIX path of the captured output, e.g. ".handoffs/runs/h_…/2026-11-04T10-00-00-000Z-test.log". */
+  /** Repo-relative POSIX path of the captured output, e.g. ".handproof/runs/h_…/2026-11-04T10-00-00-000Z-test.log". */
   logPath: string | null;
   /** Last 4096 bytes of output, UTF-8 decoded (lossy). */
   outputTail: string;
@@ -30,7 +30,7 @@ export interface RunCheckOptions {
 }
 
 export const TAIL_BYTES = 4096;
-export const TRUNCATED_MARKER = "[handoffs] output truncated to the last 1 MiB";
+export const TRUNCATED_MARKER = "[handproof] output truncated to the last 1 MiB";
 
 /** Unique acceptance[].check names in first-appearance order. */
 export function checksToRun(h: Handoff): string[] {
@@ -63,7 +63,7 @@ function logFileName(at: Date, name: string): string {
 /** Runs one configured check. Never throws for a bad, unknown or unspawnable command. */
 export async function runCheck(name: string, def: CheckDef | undefined, opts: RunCheckOptions): Promise<CheckResult> {
   if (def === undefined) {
-    return failed(name, "unknown_check", `check '${name}' is not defined in .handoffs/config.json`);
+    return failed(name, "unknown_check", `check '${name}' is not defined in .handproof/config.json`);
   }
   let argv: string[];
   try {

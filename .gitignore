@@ -8,10 +8,11 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# handoffs runtime state (when dogfooding in this repo)
-.handoffs/handoffs.db
-.handoffs/handoffs.db-*
-.handoffs/runs/
+# handproof runtime state (when dogfooding in this repo)
+.handproof/handoffs.db
+.handproof/handoffs.db-*
+.handproof/runs/
 
 # per-worktree agent configs (team trial)
 .cursor/
+.codex/

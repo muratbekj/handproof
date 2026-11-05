@@ -21,7 +21,7 @@ const TOOL_NAMES = [
   "handoff_review",
 ];
 
-const PROMPT_NAMES = ["handoff", "pickup", "review"];
+const PROMPT_NAMES = ["create", "pickup", "review"];
 
 function configKeys(): string[] {
   const shape = ConfigSchema.shape;
@@ -64,12 +64,12 @@ describe("README and examples (PLAN Step 4)", () => {
     };
 
     expect(readme).toContain("handoffs");
-    expect(claude).toContain("claude mcp add handoffs");
-    expect(claude).toContain("HANDOFFS_AGENT=planner");
-    expect(claude).toContain("HANDOFFS_HARNESS=claude-code");
+    expect(claude).toContain("claude mcp add handproof");
+    expect(claude).toContain("HANDPROOF_AGENT=planner");
+    expect(claude).toContain("HANDPROOF_HARNESS=claude-code");
 
-    expect(cursor.mcpServers.handoffs?.env?.HANDOFFS_AGENT).toBe("cursor-impl");
-    expect(cursor.mcpServers.handoffs?.env?.HANDOFFS_HARNESS).toBe("cursor");
+    expect(cursor.mcpServers.handproof?.env?.HANDPROOF_AGENT).toBe("cursor-impl");
+    expect(cursor.mcpServers.handproof?.env?.HANDPROOF_HARNESS).toBe("cursor");
     expect(readme).toContain("cursor.mcp.json");
   });
 });

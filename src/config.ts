@@ -6,17 +6,17 @@ import { formatPath } from "./schema/errors.ts";
 import { AgentRef, Harness } from "./schema/handoff.ts";
 
 export interface RepoPaths {
-  /** Absolute main-worktree root (or HANDOFFS_REPO). */
+  /** Absolute main-worktree root (or HANDPROOF_REPO). */
   root: string;
   /** Absolute toplevel of the current worktree. */
   worktreeRoot: string;
-  /** <root>/.handoffs */
+  /** <root>/.handproof */
   handoffsDir: string;
-  /** <root>/.handoffs/config.json */
+  /** <root>/.handproof/config.json */
   configPath: string;
-  /** <root>/.handoffs/handoffs.db */
+  /** <root>/.handproof/handoffs.db */
   dbPath: string;
-  /** <root>/.handoffs/runs */
+  /** <root>/.handproof/runs */
   runsDir: string;
 }
 
@@ -84,7 +84,7 @@ function locateGit(dir: string): GitLocation | null {
 
 export function resolveRepo(opts: { cwd: string; env: NodeJS.ProcessEnv }): RepoPaths {
   const cwd = resolve(opts.cwd);
-  const override = opts.env.HANDOFFS_REPO;
+  const override = opts.env.HANDPROOF_REPO;
   let loc: GitLocation;
 
   if (override !== undefined && override !== "") {
@@ -93,7 +93,7 @@ export function resolveRepo(opts: { cwd: string; env: NodeJS.ProcessEnv }): Repo
     if (target === null) {
       throw new HandoffsError(
         "not_a_git_repo",
-        `HANDOFFS_REPO=${override} is not inside a git repository`,
+        `HANDPROOF_REPO=${override} is not inside a git repository`,
         { path: overrideDir },
       );
     }
@@ -107,14 +107,14 @@ export function resolveRepo(opts: { cwd: string; env: NodeJS.ProcessEnv }): Repo
     if (here === null) {
       throw new HandoffsError(
         "not_a_git_repo",
-        `${cwd} is not inside a git repository (run inside a repo or set HANDOFFS_REPO)`,
+        `${cwd} is not inside a git repository (run inside a repo or set HANDPROOF_REPO)`,
         { path: cwd },
       );
     }
     loc = here;
   }
 
-  const handoffsDir = join(loc.root, ".handoffs");
+  const handoffsDir = join(loc.root, ".handproof");
   return {
     root: loc.root,
     worktreeRoot: loc.worktreeRoot,
@@ -185,9 +185,9 @@ export function loadConfig(paths: RepoPaths): Config {
 // ---------------------------------------------------------------------------
 
 export function resolveAgent(env: NodeJS.ProcessEnv): AgentRef {
-  const name = env.HANDOFFS_AGENT?.trim();
-  const harness = Harness.safeParse(env.HANDOFFS_HARNESS?.trim());
-  const session = env.HANDOFFS_SESSION?.trim();
+  const name = env.HANDPROOF_AGENT?.trim();
+  const harness = Harness.safeParse(env.HANDPROOF_HARNESS?.trim());
+  const session = env.HANDPROOF_SESSION?.trim();
   const agent: AgentRef = {
     name: name !== undefined && name !== "" ? name : "anonymous",
     harness: harness.success ? harness.data : "other",
@@ -204,8 +204,8 @@ export function isHuman(agent: AgentRef): boolean {
 // init
 // ---------------------------------------------------------------------------
 
-export const GITIGNORE_COMMENT = "# handoffs-mcp";
-export const GITIGNORE_LINES = [".handoffs/handoffs.db", ".handoffs/handoffs.db-*", ".handoffs/runs/"] as const;
+export const GITIGNORE_COMMENT = "# handproof";
+export const GITIGNORE_LINES = [".handproof/handoffs.db", ".handproof/handoffs.db-*", ".handproof/runs/"] as const;
 
 export interface InitResult {
   created: string[];
@@ -213,13 +213,13 @@ export interface InitResult {
   skipped: string[];
 }
 
-/** Idempotent: writes .handoffs/config.json if missing and appends missing .gitignore lines. Paths in the result are relative to the repo root. */
+/** Idempotent: writes .handproof/config.json if missing and appends missing .gitignore lines. Paths in the result are relative to the repo root. */
 export function runInit(paths: RepoPaths): InitResult {
   const result: InitResult = { created: [], updated: [], skipped: [] };
 
   mkdirSync(paths.handoffsDir, { recursive: true });
 
-  const configRel = ".handoffs/config.json";
+  const configRel = ".handproof/config.json";
   if (existsSync(paths.configPath)) {
     result.skipped.push(configRel);
   } else {

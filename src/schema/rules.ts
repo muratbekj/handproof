@@ -105,7 +105,7 @@ function runRules(input: unknown, ctx: RuleContext): RuleOutcome {
     issues.push({
       path: formatPath(["acceptance", i, "check"]),
       problem: `unknown check '${check}'`,
-      fix: checkNames.length > 0 ? `use one of: ${checkNames.join(", ")}` : "define it in .handoffs/config.json",
+      fix: checkNames.length > 0 ? `use one of: ${checkNames.join(", ")}` : "define it in .handproof/config.json",
     });
   });
 

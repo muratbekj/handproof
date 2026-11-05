@@ -133,7 +133,7 @@ function notFound(id: string): ServiceError {
 }
 
 function dbBusy(): ServiceError {
-  return { error: "db_busy", message: "the handoffs database is busy; retry the call", retryable: true };
+  return { error: "db_busy", message: "the handproof database is busy; retry the call", retryable: true };
 }
 
 function textIssue(path: string, value: unknown, max: number): Issue | null {

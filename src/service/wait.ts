@@ -61,7 +61,7 @@ export async function waitForStatus(ids: readonly string[], opts: WaitOptions, d
 
   let initial = read();
   while (initial === null) {
-    if (timedOut()) throw new HandoffsError("db_busy", "the handoffs database stayed busy until the timeout");
+    if (timedOut()) throw new HandoffsError("db_busy", "the handproof database stayed busy until the timeout");
     await deps.sleep(interval);
     initial = read();
   }

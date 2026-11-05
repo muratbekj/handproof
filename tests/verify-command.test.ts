@@ -38,7 +38,7 @@ describe("splitCommand", () => {
 describe("runCommand and runCheck", () => {
   function repoLayout(): { repoRoot: string; runsDir: string } {
     const repoRoot = tmpDir("handoffs-cmd-cwd-");
-    const runsDir = path.join(repoRoot, ".handoffs", "runs");
+    const runsDir = path.join(repoRoot, ".handproof", "runs");
     fs.mkdirSync(runsDir, { recursive: true });
     return { repoRoot, runsDir };
   }
@@ -57,7 +57,7 @@ describe("runCommand and runCheck", () => {
       });
       expect(result.passed).toBe(true);
       expect(result.exitCode).toBe(0);
-      expect(result.logPath).toMatch(/^\.handoffs\/runs\//);
+      expect(result.logPath).toMatch(/^\.handproof\/runs\//);
       if (result.logPath === null) throw new Error("expected logPath");
       const logAbs = path.join(repoRoot, result.logPath);
       expect(fs.existsSync(logAbs)).toBe(true);
@@ -147,7 +147,7 @@ describe("runCommand and runCheck", () => {
       const stat = fs.statSync(logAbs);
       expect(stat.size).toBeLessThanOrEqual(OUTPUT_CAP + 512);
       const head = fs.readFileSync(logAbs, "utf8").split("\n")[0];
-      expect(head).toBe("[handoffs] output truncated to the last 1 MiB");
+      expect(head).toBe("[handproof] output truncated to the last 1 MiB");
     } finally {
       removeDir(repoRoot);
     }

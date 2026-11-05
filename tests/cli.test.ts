@@ -41,7 +41,7 @@ describe("CLI ls and show", () => {
       const idB = b.value.handoff.id;
       planner.close();
 
-      const env = testEnv({ HANDOFFS_REPO: repo.dir });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir });
       const { code, out } = await captureStdout(() => main(["ls"], env, repo.dir));
       expect(code).toBe(0);
       expect(out).toContain(idA);
@@ -55,7 +55,7 @@ describe("CLI ls and show", () => {
     const repo = tmpRepo();
     try {
       openTestService(repo, AGENTS.planner).close();
-      const env = testEnv({ HANDOFFS_REPO: repo.dir });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir });
       const { code, out } = await captureStdout(() =>
         main(["ls", "--status", "cancelled"], env, repo.dir),
       );
@@ -78,7 +78,7 @@ describe("CLI ls and show", () => {
       const expected = `${renderBrief(created.value.handoff, events)}\n`;
       planner.close();
 
-      const env = testEnv({ HANDOFFS_REPO: repo.dir });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir });
       const { code, out } = await captureStdout(() => main(["show", id], env, repo.dir));
       expect(code).toBe(0);
       expect(out).toBe(expected);
@@ -91,7 +91,7 @@ describe("CLI ls and show", () => {
     const repo = tmpRepo();
     try {
       openTestService(repo, AGENTS.planner).close();
-      const env = testEnv({ HANDOFFS_REPO: repo.dir });
+      const env = testEnv({ HANDPROOF_REPO: repo.dir });
       const code = await main(["show", "h_nope"], env, repo.dir);
       expect(code).toBe(1);
     } finally {
@@ -103,16 +103,16 @@ describe("CLI ls and show", () => {
     const raw = fs.readFileSync(CURSOR_EXAMPLE, "utf8");
     const json = JSON.parse(raw) as {
       mcpServers: {
-        handoffs: {
+        handproof: {
           command: string;
           args: string[];
           env: Record<string, string>;
         };
       };
     };
-    expect(json.mcpServers.handoffs.command).toBe("bunx");
-    expect(json.mcpServers.handoffs.args).toEqual(["handoffs-mcp", "serve"]);
-    expect(json.mcpServers.handoffs.env.HANDOFFS_AGENT).toBe("cursor-impl");
-    expect(json.mcpServers.handoffs.env.HANDOFFS_HARNESS).toBe("cursor");
+    expect(json.mcpServers.handproof.command).toBe("bunx");
+    expect(json.mcpServers.handproof.args).toEqual(["handproof", "serve"]);
+    expect(json.mcpServers.handproof.env.HANDPROOF_AGENT).toBe("cursor-impl");
+    expect(json.mcpServers.handproof.env.HANDPROOF_HARNESS).toBe("cursor");
   });
 });
