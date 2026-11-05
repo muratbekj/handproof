@@ -1,6 +1,6 @@
 import { type Config, type RepoPaths, loadConfig } from "../config.ts";
 import { isHandoffsError } from "../errors.ts";
-import type { Handoff } from "../schema/handoff.ts";
+import { type Handoff, preexistingOf } from "../schema/handoff.ts";
 import { type CheckResult, checksToRun, runCheck } from "./checks.ts";
 import { type Violation, changedFiles, checkScope } from "./scope.ts";
 
@@ -17,7 +17,15 @@ export interface Verification {
   by: string;
   passed: boolean;
   checks: CheckResult[];
-  scope: { base: string | null; usedMergeBase: boolean; files: string[]; violations: Violation[]; error?: string };
+  scope: {
+    base: string | null;
+    usedMergeBase: boolean;
+    files: string[];
+    /** Pre-existing changes unchanged since create, left out of `files` (absent on Phase 2 events). */
+    ignored: string[];
+    violations: Violation[];
+    error?: string;
+  };
   criteria: CriterionResult[];
 }
 
@@ -34,17 +42,24 @@ export function checksTimeoutSec(h: Handoff, config: Config): number {
 
 function scopeResult(h: Handoff, paths: RepoPaths): Verification["scope"] {
   try {
-    const changed = changedFiles({ cwd: paths.worktreeRoot, baseCommit: h.repo.baseCommit, branch: h.repo.branch });
+    const changed = changedFiles({
+      cwd: paths.worktreeRoot,
+      baseCommit: h.repo.baseCommit,
+      branch: h.repo.branch,
+      preexisting: preexistingOf(h),
+      ...(h.repo.worktree !== undefined ? { creatorWorktree: h.repo.worktree } : {}),
+    });
     return {
       base: changed.base,
       usedMergeBase: changed.usedMergeBase,
       files: changed.files,
+      ignored: changed.ignored,
       violations: checkScope(changed.files, h.scope, h.kind),
     };
   } catch (err) {
     // Only a missing base is a scope verdict; any other failure (git missing, diff failed) aborts the run.
     if (!isHandoffsError(err) || err.code !== "scope_base_unavailable") throw err;
-    return { base: null, usedMergeBase: false, files: [], violations: [], error: `${err.code}: ${err.message}` };
+    return { base: null, usedMergeBase: false, files: [], ignored: [], violations: [], error: `${err.code}: ${err.message}` };
   }
 }
 

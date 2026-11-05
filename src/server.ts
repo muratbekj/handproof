@@ -1,12 +1,10 @@
-import {
-  McpServer,
-  ProtocolError,
-  ProtocolErrorCode,
-  ResourceNotFoundError,
-  ResourceTemplate,
-} from "@modelcontextprotocol/server";
+import { McpServer, ResourceNotFoundError, ResourceTemplate } from "@modelcontextprotocol/server";
 import type { Config, RepoPaths } from "./config.ts";
+import { registerHandoffPrompt } from "./prompts/handoff.ts";
+import { registerPickupPrompt } from "./prompts/pickup.ts";
+import { registerReviewPrompt } from "./prompts/review.ts";
 import { renderBrief, renderInbox } from "./render/markdown.ts";
+import { serviceProtocolError } from "./rpc-error.ts";
 import type { AgentRef } from "./schema/handoff.ts";
 import type { HandoffService, ServiceError } from "./service/handoffs.ts";
 import { registerCancel } from "./tools/cancel.ts";
@@ -33,14 +31,12 @@ const NON_TERMINAL = ["open", "claimed", "submitted", "changes_requested", "veri
 
 /** Resource callbacks reject with a JSON-RPC error that carries the service error code in `data`. */
 function resourceError(err: ServiceError, uri: string): Error {
-  if (err.error === "not_found") return new ResourceNotFoundError(uri);
-  const data: Record<string, unknown> = { error: err.error };
-  if (err.error === "db_busy") data.retryable = true;
-  return new ProtocolError(ProtocolErrorCode.InternalError, err.message, data);
+  return err.error === "not_found" ? new ResourceNotFoundError(uri) : serviceProtocolError(err);
 }
 
 /**
- * Builds the MCP server: ten handoff tools, the inbox resource and one resource per handoff.
+ * Builds the MCP server: ten handoff tools, the inbox resource, one resource per handoff and the
+ * handoff, pickup and review prompts.
  * Never write to stdout from server code: it carries the JSON-RPC stream. Log with console.error.
  */
 export function createServer(deps: ServerDeps): McpServer {
@@ -50,13 +46,17 @@ export function createServer(deps: ServerDeps): McpServer {
   registerCreate(server, service);
   registerList(server, service);
   registerGet(server, service);
-  registerClaim(server, service);
+  registerClaim(server, service, deps.paths);
   registerUpdate(server, service);
   registerRelease(server, service);
   registerCancel(server, service);
   registerSubmit(server, service);
   registerVerify(server, service);
   registerReview(server, service);
+
+  registerHandoffPrompt(server, deps.paths);
+  registerPickupPrompt(server, { paths: deps.paths, agent, service });
+  registerReviewPrompt(server, { agent, service });
 
   server.registerResource(
     "handoff",

@@ -14,7 +14,8 @@ export type EventType =
   | "changes_requested"
   | "accepted"
   | "rejected"
-  | "verification_interrupted";
+  | "verification_interrupted"
+  | "logs_pruned";
 
 export interface HandoffEvent {
   seq: number;

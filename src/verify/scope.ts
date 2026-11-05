@@ -1,13 +1,20 @@
+import { realpathSync, statSync } from "node:fs";
+import { join } from "node:path";
 import picomatch from "picomatch/posix";
 import { gitEnv } from "../config.ts";
 import { HandoffsError } from "../errors.ts";
-import type { Kind } from "../schema/handoff.ts";
+import type { Kind, Preexisting } from "../schema/handoff.ts";
 
 export interface ChangedFiles {
   files: string[];
+  /** Pre-existing changes left untouched since create; excluded from `files`. */
+  ignored: string[];
   base: string;
   usedMergeBase: boolean;
 }
+
+/** More uncommitted paths than this at create refuses the handoff. */
+export const PREEXISTING_MAX = 1000;
 
 export interface Violation {
   path: string;
@@ -25,10 +32,16 @@ interface GitRun {
   stderr: string;
 }
 
-function git(cwd: string, args: string[]): GitRun {
+function git(cwd: string, args: string[], input?: string): GitRun {
   let proc;
   try {
-    proc = Bun.spawnSync(["git", ...args], { cwd, env: gitEnv(), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    proc = Bun.spawnSync(["git", ...args], {
+      cwd,
+      env: gitEnv(),
+      stdin: input === undefined ? "ignore" : Buffer.from(input),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
   } catch (err) {
     throw new HandoffsError("git_not_found", "could not run git; is it installed and on PATH?", { cause: String(err) });
   }
@@ -64,12 +77,99 @@ function resolveBase(cwd: string, baseCommit: string, branch: string): { base: s
   return { base, usedMergeBase: true };
 }
 
+function isFile(p: string): boolean {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Working-tree `git hash-object` of each path; null when it isn't a file on disk (deleted).
+ * One --stdin-paths call; a path with a newline (or a leading quote, which git would unquote) is hashed alone.
+ */
+function blobsOf(cwd: string, paths: string[]): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  const batch: string[] = [];
+  for (const p of paths) {
+    if (!isFile(join(cwd, p))) out.set(p, null);
+    else if (/[\n\r]/.test(p) || p.startsWith('"')) out.set(p, hashOne(cwd, ["hash-object", "--", p]));
+    else batch.push(p);
+  }
+  if (batch.length > 0) {
+    const r = git(cwd, ["hash-object", "--stdin-paths"], `${batch.join("\n")}\n`);
+    const hashes = r.stdout.toString("utf8").split("\n").filter((l) => l !== "");
+    if (r.exitCode !== 0 || hashes.length !== batch.length) {
+      throw new HandoffsError("scope_diff_failed", `git hash-object failed: ${r.stderr}`, {});
+    }
+    batch.forEach((p, i) => out.set(p, hashes[i] ?? null));
+  }
+  return out;
+}
+
+function hashOne(cwd: string, args: string[]): string {
+  const r = git(cwd, args);
+  const hash = r.stdout.toString("utf8").trim();
+  if (r.exitCode !== 0 || hash === "") throw new HandoffsError("scope_diff_failed", `git hash-object failed: ${r.stderr}`, {});
+  return hash;
+}
+
+/**
+ * Uncommitted changes in the worktree at `cwd` (vs HEAD, plus untracked, ignored files excluded),
+ * with the working-tree blob of each, sorted by path. Runtime files are dropped like in changedFiles.
+ * Throws too_many_preexisting_changes above PREEXISTING_MAX paths, before hashing anything.
+ */
+export function snapshotDirty(cwd: string): Preexisting[] {
+  const diff = git(cwd, ["diff", "-z", "--name-only", "--no-renames", "HEAD"]);
+  if (diff.exitCode !== 0) throw new HandoffsError("scope_diff_failed", `git diff against HEAD failed: ${diff.stderr}`, {});
+  const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"]);
+  if (untracked.exitCode !== 0) throw new HandoffsError("scope_diff_failed", `git ls-files failed: ${untracked.stderr}`, {});
+  const paths = [...new Set([...nulList(diff.stdout), ...nulList(untracked.stdout)])].filter((p) => !isRuntimeFile(p)).sort();
+  if (paths.length > PREEXISTING_MAX) {
+    throw new HandoffsError(
+      "too_many_preexisting_changes",
+      `the worktree has ${paths.length} uncommitted paths (max ${PREEXISTING_MAX}); commit or stash unrelated work, then create the handoff`,
+      { count: paths.length, max: PREEXISTING_MAX, fix: "commit or stash unrelated work, then create the handoff" },
+    );
+  }
+  const blobs = blobsOf(cwd, paths);
+  return paths.map((path) => ({ path, blob: blobs.get(path) ?? null }));
+}
+
+function samePath(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return false;
+  }
+}
+
+/** Splits `files` into changed and ignored: a pre-existing path whose working-tree blob is unchanged. */
+function splitPreexisting(cwd: string, files: string[], preexisting: Preexisting[]): { files: string[]; ignored: string[] } {
+  const recorded = new Map(preexisting.map((p) => [p.path, p.blob]));
+  const candidates = files.filter((f) => recorded.has(f));
+  if (candidates.length === 0) return { files, ignored: [] };
+  const current = blobsOf(cwd, candidates);
+  const ignored = new Set(candidates.filter((f) => current.get(f) === recorded.get(f)));
+  return { files: files.filter((f) => !ignored.has(f)), ignored: [...ignored] };
+}
+
 /**
  * Files changed in the worktree at `cwd` since the base: committed, staged, unstaged and untracked
  * (ignored files excluded). Runtime files under .handoffs/ are dropped except PROTECTED_PATHS.
+ * Pre-existing changes whose blob is unchanged move to `ignored` (protected paths included: an
+ * unchanged config is not an edit, a changed one is caught).
  * Never returns "no changes" for an unusable base: throws scope_base_unavailable instead.
  */
-export function changedFiles(opts: { cwd: string; baseCommit: string; branch: string }): ChangedFiles {
+export function changedFiles(opts: {
+  cwd: string;
+  baseCommit: string;
+  branch: string;
+  /** Uncommitted changes recorded at create; only excluded when `cwd` is `creatorWorktree`. */
+  preexisting?: Preexisting[];
+  creatorWorktree?: string;
+}): ChangedFiles {
   const { base, usedMergeBase } = resolveBase(opts.cwd, opts.baseCommit, opts.branch);
   const diff = git(opts.cwd, ["diff", "-z", "--name-only", "--no-renames", base]);
   if (diff.exitCode !== 0) {
@@ -81,7 +181,12 @@ export function changedFiles(opts: { cwd: string; baseCommit: string; branch: st
   }
   const all = new Set([...nulList(diff.stdout), ...nulList(untracked.stdout)]);
   const files = [...all].filter((p) => !isRuntimeFile(p)).sort();
-  return { files, base, usedMergeBase };
+  const pre = opts.preexisting ?? [];
+  // Another worktree's dirty files aren't the creator's: excluding them there would hide real changes.
+  if (pre.length === 0 || opts.creatorWorktree === undefined || !samePath(opts.cwd, opts.creatorWorktree)) {
+    return { files, ignored: [], base, usedMergeBase };
+  }
+  return { ...splitPreexisting(opts.cwd, files, pre), base, usedMergeBase };
 }
 
 /**

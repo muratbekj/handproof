@@ -10,14 +10,14 @@ import {
 } from "../../src/config";
 import type { AgentRef } from "../../src/schema/handoff";
 import { openService } from "../../src/service/open";
-import type { HandoffService } from "../../src/service/handoffs";
+import type { HandoffAdmin, HandoffService } from "../../src/service/handoffs";
 import type { HandoffRepo } from "../../src/store/repo";
 import type { Db } from "../../src/store/db";
 import { testEnv } from "./env";
 import type { TmpRepo } from "./tmpRepo";
 
 export interface ServiceHandle {
-  service: HandoffService;
+  service: HandoffService & HandoffAdmin;
   repo: HandoffRepo;
   db: Db;
   paths: RepoPaths;

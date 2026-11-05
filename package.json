@@ -1,21 +1,42 @@
 {
   "name": "handoffs-mcp",
   "version": "0.0.1",
-  "description": "Structured handoffs between coding agents over MCP",
+  "description": "A typed, verifiable handoff contract between coding agents over MCP",
   "license": "MIT",
+  "author": "muratbekj",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muratbekj/handsoff-mcp.git"
+  },
+  "homepage": "https://github.com/muratbekj/handsoff-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/muratbekj/handsoff-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agents",
+    "handoff",
+    "claude-code",
+    "cursor",
+    "coding-agents"
+  ],
   "type": "module",
   "bin": {
     "handoffs-mcp": "./dist/bin.js",
     "handoffs": "./dist/bin.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "bun": ">=1.4.0"
   },
   "scripts": {
     "build": "bun build src/bin.ts --target=bun --outdir dist",
+    "prepack": "bun run build",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."

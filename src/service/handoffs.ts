@@ -9,7 +9,9 @@ import { parseHandoffInput } from "../schema/rules.ts";
 import { isBusy } from "../store/db.ts";
 import type { HandoffEvent, HandoffRepo, NewEvent, StatePatch } from "../store/repo.ts";
 import { transition } from "./lifecycle.ts";
+import { type PruneOptions, type PruneReport, pruneLogs } from "./prune.ts";
 import { rolesFor } from "./roles.ts";
+import { snapshotDirty } from "../verify/scope.ts";
 import { scanSecrets, secretError } from "../verify/secrets.ts";
 import { type Verification, checksTimeoutSec, verifyHandoff } from "../verify/verify.ts";
 
@@ -87,6 +89,14 @@ export interface HandoffService {
   review(id: string, decision: ReviewDecision, reason?: string): Result<Handoff>;
 }
 
+/** CLI-only operations (no MCP tool exposes them); `createHandoffService` returns both. */
+export interface HandoffAdmin {
+  /** Lease/verification expiry (no renewal), then each id's status; not_found for an unknown id. */
+  statuses(ids: string[]): Result<Record<string, Status>>;
+  /** Deletes old check logs of done/cancelled handoffs (see prune.ts). */
+  prune(opts: PruneOptions): Result<PruneReport>;
+}
+
 export function toSummary(h: Handoff): HandoffSummary {
   return {
     id: h.id,
@@ -151,7 +161,7 @@ function scanCreateInput(raw: unknown) {
   return SCANNED_CREATE_FIELDS.flatMap((f) => scanSecrets(rec[f], [f]));
 }
 
-export function createHandoffService(deps: ServiceDeps): HandoffService {
+export function createHandoffService(deps: ServiceDeps): HandoffService & HandoffAdmin {
   const { repo, config, paths, agent, git } = deps;
   const leaseMs = config.leaseMinutes * 60_000;
 
@@ -165,6 +175,13 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     repo.expireVerifications(at, leaseFrom(at));
     repo.renewLeases(agent.name, leaseFrom(at), at);
     return at;
+  };
+
+  /** Expiry only: a reader (wait) must not renew its own leases. */
+  const expire = (): void => {
+    const at = nowIso();
+    repo.expireLeases(at);
+    repo.expireVerifications(at, leaseFrom(at));
   };
 
   /** Busy and coded errors become a failed Result; anything else is rethrown. */
@@ -297,11 +314,12 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
     return secrets === null ? ok(parsed.data) : fail(secrets);
   };
 
-  const alreadyClaimed = (id: string, by: string): ServiceError => ({
+  const alreadyClaimed = (id: string, claim: NonNullable<Handoff["claim"]>): ServiceError => ({
     error: "already_claimed",
-    message: `${id} is already claimed by ${by}`,
+    message: `${id} is already claimed by ${claim.by.name} until ${claim.leaseUntil}`,
     id,
-    by,
+    by: claim.by.name,
+    leaseUntil: claim.leaseUntil,
   });
 
   return {
@@ -315,13 +333,15 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
         if (head === null) {
           return fail({ error: "no_commits", message: "the repository has no commits; commit once before creating a handoff" });
         }
+        // Uncommitted work that is already there isn't the implementer's (throws too_many_preexisting_changes).
+        const preexisting = snapshotDirty(paths.worktreeRoot);
         const handoff: Handoff = {
           ...parsed.value,
           id: newHandoffId(),
           schemaVersion: 1,
           status: "open",
           from: agent,
-          repo: { root: paths.root, branch: git.branch(), baseCommit: head },
+          repo: { root: paths.root, branch: git.branch(), baseCommit: head, worktree: paths.worktreeRoot, preexisting },
           claim: null,
           result: null,
           createdAt: at,
@@ -387,7 +407,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           });
         }
         if ((h.status === "claimed" || h.status === "changes_requested") && h.claim !== null) {
-          return h.claim.by.name === agent.name ? ok(h) : fail(alreadyClaimed(id, h.claim.by.name));
+          return h.claim.by.name === agent.name ? ok(h) : fail(alreadyClaimed(id, h.claim));
         }
         const t = transition(h.status, "claim", roles);
         if (!t.ok) return fail({ error: t.code, message: t.reason, reason: t.reason });
@@ -401,7 +421,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
           const now = repo.get(id);
           if (now === null) return fail(notFound(id));
           if ((now.status === "claimed" || now.status === "changes_requested") && now.claim !== null) {
-            return now.claim.by.name === agent.name ? ok(now) : fail(alreadyClaimed(id, now.claim.by.name));
+            return now.claim.by.name === agent.name ? ok(now) : fail(alreadyClaimed(id, now.claim));
           }
           if (now.status === "open") continue;
           const after = transition(now.status, "claim", rolesFor(agent, now));
@@ -454,6 +474,29 @@ export function createHandoffService(deps: ServiceDeps): HandoffService {
 
     history(id) {
       return repo.events(id);
+    },
+
+    statuses(ids) {
+      try {
+        expire();
+        const out: Record<string, Status> = {};
+        for (const id of ids) {
+          const h = repo.get(id);
+          if (h === null) return fail(notFound(id));
+          out[id] = h.status;
+        }
+        return ok(out);
+      } catch (err) {
+        return caught(err);
+      }
+    },
+
+    prune(opts) {
+      try {
+        return ok(pruneLogs({ repo, paths, now: deps.now, agent }, opts));
+      } catch (err) {
+        return caught(err);
+      }
     },
 
     submit(id, raw) {
