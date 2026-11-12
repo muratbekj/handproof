@@ -237,6 +237,16 @@ Check logs grow with every verification run, up to 1 MiB per check run, under `.
 - Paths and scope globs are normalized to repo-relative POSIX paths and rejected if they resolve outside the repo.
 - stdio only: the server opens no network listener.
 
+## In practice
+
+One real multi-agent build ran 50 handoffs over about two days (November 9–12, 2026). That's a small sample, but every number below comes from its handoff database:
+
+- 10 of 61 submissions (16%) failed verification: 7 for editing files outside the handoff's scope, 3 for failing checks.
+- 7 more passed verification and were still rejected by the lead agent that created them. In one, a commit carried a `Co-authored-by: Cursor` trailer the project didn't allow, and no check looked for it.
+- 44 handoffs ended `done` and 6 were cancelled.
+
+Verification catches only what its checks and scope rules cover. Review the diff before accepting (see [Known limitations](#known-limitations)).
+
 ## Known limitations
 
 - **Verification runs in the calling agent's worktree.** Checks and the scope diff run where the agent that submits (or calls `handoff_verify`) is checked out. If the implementer works in a different worktree from the reviewer, the reviewer's `handoff_verify` checks the reviewer's files.
