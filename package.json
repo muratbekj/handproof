@@ -23,9 +23,10 @@
   ],
   "type": "module",
   "bin": {
-    "handproof": "./dist/bin.js"
+    "handproof": "./bin/handproof.js"
   },
   "files": [
+    "bin",
     "dist",
     "README.md",
     "LICENSE"

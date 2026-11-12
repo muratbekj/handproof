@@ -7,7 +7,7 @@ A typed, verifiable handoff contract between coding agents over MCP. One agent p
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.4 and git.
-- Run it with `bunx`, not `npx`: the server and CLI run on Bun (they use `bun:sqlite`).
+- `bunx handproof` and `npx handproof` both work. The server and CLI always run on Bun (they use `bun:sqlite`), so `npx` needs Bun installed too and prints an install hint if it isn't.
 
 > **Not on npm yet.** Until it is, run it from source: `git clone https://github.com/muratbekj/handproof && cd handproof && bun install`, then use `bun /abs/path/to/handproof/src/bin.ts` wherever this README says `bunx handproof`.
 
