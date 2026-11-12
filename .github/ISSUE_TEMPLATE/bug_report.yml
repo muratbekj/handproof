@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in handproof doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For a security issue, don't use this form: report it privately from the **Security** tab instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Include the exact error text.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem. Include the handoff or tool call input if it matters, with secrets removed.
+      placeholder: |
+        1. handproof init in a fresh repo
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: handproof version
+      description: Output of `npx handproof --version` (or the commit, if you run it from source)
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      multiple: true
+      options:
+        - Claude Code
+        - Cursor editor
+        - Cursor Agent CLI
+        - Codex CLI
+        - CLI only (no MCP client)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Client version, Bun version and OS
+      placeholder: Cursor 2.1, Bun 1.4.0, macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything relevant from `handproof show <id>`, the check logs under `.handproof/runs/`, or the client's MCP log. Remove secrets first.
+      render: text

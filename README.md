@@ -1,5 +1,7 @@
 # handproof
 
+[![npm](https://img.shields.io/npm/v/handproof)](https://www.npmjs.com/package/handproof) [![CI](https://github.com/muratbekj/handproof/actions/workflows/ci.yml/badge.svg)](https://github.com/muratbekj/handproof/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 A typed, verifiable handoff contract between coding agents over MCP. One agent packages a task (goal, context, scope, acceptance criteria), another claims it, and the server checks the result before anyone can accept it.
 
 <!-- demo.gif goes here (T16): Claude Code hands a task to Cursor, Cursor's out-of-scope package.json edit is caught by verification, the fix, the accept. -->
@@ -263,3 +265,14 @@ Run by a human; not automated.
 3. In Cursor, call `handoff_list`; the same id appears.
 4. In Cursor, call `handoff_claim` with that id (or, in the Cursor editor, run the `pickup` prompt); it returns `claimed`, the markdown brief and the `handoff_submit` call to make.
 5. In a terminal, run `handproof show <id>`; it shows the handoff claimed by `cursor-impl`.
+
+## Contributing
+
+Bug reports, client setup checks and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the checks to run and what a PR needs.
+
+- **Unchecked clients:** if you can run Codex, [#9](https://github.com/muratbekj/handproof/issues/9) lists what to check. For another client, use the *Client setup report* issue form.
+- **Security issues:** report them privately from the **Security** tab, not in a public issue.
+
+## License
+
+[MIT](LICENSE)

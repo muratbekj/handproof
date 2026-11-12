@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a change or a new capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and where handproof gets in the way or falls short. A real example helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: How you'd want it to work. Tool names, CLI flags or config fields are welcome, but not required.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: Any workaround you use now, or other approaches you considered.

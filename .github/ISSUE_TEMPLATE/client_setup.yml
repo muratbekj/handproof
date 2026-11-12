@@ -1,0 +1,44 @@
+name: Client setup report
+description: You ran handproof in an MCP client (Codex, a new Cursor version, another app) and want to report what worked
+labels: [needs verification]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports like this are how a client gets marked as checked in the README. If there's already an issue for your client (for Codex it's #9), add your results there instead.
+  - type: input
+    id: client
+    attributes:
+      label: Client and version
+      placeholder: Codex CLI 0.x, macOS 15
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: handproof version
+      description: Output of `npx handproof --version` (or the commit, if you run it from source)
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config you used
+      description: The MCP server config for handproof, with secrets removed
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      options:
+        - label: The client lists the handproof tools
+        - label: A handoff created in this client shows up in `handproof ls`
+        - label: Claim, submit and verification work from this client
+        - label: The client shows the handproof prompts (`create`, `pickup`, `review`)
+  - type: textarea
+    id: notes
+    attributes:
+      label: What didn't work, or differs from the docs
+      description: Error text, steps that needed changing, or anything in `examples/` that's wrong
