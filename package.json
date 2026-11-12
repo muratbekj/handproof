@@ -1,6 +1,6 @@
 {
   "name": "handproof",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A typed, verifiable handoff contract between coding agents over MCP",
   "license": "MIT",
   "author": "muratbekj",
