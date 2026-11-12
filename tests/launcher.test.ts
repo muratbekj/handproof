@@ -27,7 +27,7 @@ beforeAll(() => {
 
 describe("npx launcher (bin/handproof.js)", () => {
   test("package.json bin points at the launcher, which starts with a node shebang", () => {
-    expect(packageJson.bin.handproof).toBe("./bin/handproof.js");
+    expect(packageJson.bin.handproof).toBe("bin/handproof.js");
     expect(fs.readFileSync(LAUNCHER, "utf8").split("\n")[0]).toBe("#!/usr/bin/env node");
   });
 

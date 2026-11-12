@@ -23,7 +23,7 @@
   ],
   "type": "module",
   "bin": {
-    "handproof": "./bin/handproof.js"
+    "handproof": "bin/handproof.js"
   },
   "files": [
     "bin",
