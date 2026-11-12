@@ -9,8 +9,6 @@ A typed, verifiable handoff contract between coding agents over MCP. One agent p
 - [Bun](https://bun.sh) ≥ 1.4 and git.
 - `bunx handproof` and `npx handproof` both work. The server and CLI always run on Bun (they use `bun:sqlite`), so `npx` needs Bun installed too and prints an install hint if it isn't.
 
-> **Not on npm yet.** Until it is, run it from source: `git clone https://github.com/muratbekj/handproof && cd handproof && bun install`, then use `bun /abs/path/to/handproof/src/bin.ts` wherever this README says `bunx handproof`.
-
 ## Quickstart
 
 handproof doesn't care which app plays which role. Every session gets an agent name (`HANDPROOF_AGENT`), and roles come from what that agent does:
