@@ -44,4 +44,4 @@ bunx handproof review <id> accept
 
 Codex can ask before each MCP tool call. Its per-server setting `default_tools_approval_mode` (`auto`, `prompt`, `writes`, `approve`) controls that; `writes` asks only for tools not marked read-only.
 
-Not verified by us yet: running these exact configs in Codex end to end. If something differs, please open an issue.
+Not verified by us yet: running these exact configs in Codex end to end. If you can run Codex, [issue #9](https://github.com/muratbekj/handproof/issues/9) lists the steps to check and what to report.
