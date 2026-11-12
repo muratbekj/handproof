@@ -7,7 +7,7 @@ A typed, verifiable handoff contract between coding agents over MCP. One agent p
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.4 and git.
-- Run it with `bunx`, not `npx`: the server and CLI run on Bun (they use `bun:sqlite`).
+- `bunx handproof` and `npx handproof` both work. The server and CLI always run on Bun (they use `bun:sqlite`), so `npx` needs Bun installed too and prints an install hint if it isn't.
 
 > **Not on npm yet.** Until it is, run it from source: `git clone https://github.com/muratbekj/handproof && cd handproof && bun install`, then use `bun /abs/path/to/handproof/src/bin.ts` wherever this README says `bunx handproof`.
 
@@ -121,6 +121,43 @@ Environment variables, set per harness in its MCP config:
 | `HANDPROOF_HARNESS` | `other` | `claude-code`, `cursor`, `codex` or `other` |
 | `HANDPROOF_REPO` | the server's working directory | Path to the repository, when the harness starts the server elsewhere |
 
+## Tasks
+
+A handoff is one agent's piece of work. A **task** is the goal those pieces belong to: research, a plan a human approves, build and fix rounds, the final review. A lead agent creates one task per goal, moves it with `task_transition`, and links each handoff it creates (`handoff_create` with `task`). Every move carries a typed payload the server validates, and the whole history lands in the task's timeline.
+
+```
+new ─► researching ⇄ planning ─► awaiting_plan_approval ─► building ⇄ verifying ─► awaiting_human_review ─► done
+ └──(low risk)──────►┘              (human)                             │              (human)
+                                                                        ├─► blocked (human decides)
+                                                                        └─► done (low risk)
+```
+
+| Move | Who | Payload |
+| --- | --- | --- |
+| `new` → `researching` | lead | `goal`, `questions[]` |
+| `new` → `planning` | lead, low risk only | `goal`, `skip_reason` |
+| `researching` → `planning` | lead | `research_file`, `summary`, `unverified[]` |
+| `planning` → `researching` | lead | `questions[]` |
+| `planning` → `awaiting_plan_approval` | lead | `plan_file`, `brief`, `steps`, `acceptance_criteria`, `security_sensitive[]`, `depends_on_unverified[]` |
+| `awaiting_plan_approval` → `building` / `planning` | human: `approve` / `reject` | optional comment / comment |
+| `building` → `verifying` | lead | `summary`, `commits[]`, `diff_lines` |
+| `verifying` → `building` | lead (one fix round) | `tests{passed, failed, failing[]}`, `blocking[{file, line, problem, fix}]`, `security[{file, line, problem, fix, severity}]` (CRITICAL/HIGH/MEDIUM), `wrong_tests[]`, `message_to_builder` |
+| `verifying` → `blocked` | lead | `reason`, `tests`, `open[]` |
+| `blocked` → `building` / `planning` | human: `approve [--rounds N]` / `reject` | more rounds (default 3) / comment |
+| `verifying` → `awaiting_human_review` | lead | `tests` (0 failed), `review_verdict: "APPROVE"`, `security_verdict: "PASS"`, `nits[]`, `low_findings[]`, `unverified[]`, `brief` |
+| `verifying` → `done` | lead, low risk only | same, without `brief` |
+| `awaiting_human_review` → `done` / `building` | human: `approve` / `reject` | optional comment / comment (no fix round used) |
+| any unfinished → `cancelled` | human: `task cancel` | reason |
+
+Rules the server enforces:
+
+- **Only a human leaves a gate.** `awaiting_plan_approval`, `blocked` and `awaiting_human_review` have no MCP move at all; `handproof approve` and `handproof reject` (identity `human-…`) are the only way out. The comment is stored word for word.
+- **At most 3 fix rounds** (`verifying` → `building`) per approved plan; the 4th is refused with `round_limit`, and the lead moves the task to `blocked`. A round with nothing to fix is refused.
+- **Low-risk shortcuts:** skipping research and finishing without the human review need risk `low`; finishing early is also refused once any CRITICAL or HIGH security finding was recorded, or while UNVERIFIED findings are open.
+- **Payloads are strict.** Unknown or misspelt fields, oversized text, and missing files (`research_file`, `plan_file`) come back as field-level issues; payload text gets the same secret scan as handoffs.
+- Approving the plan records the commit at that moment (`plan approved at …` in `task show`), so "the diff since the plan was approved" has a fixed base.
+- Handoffs can't be linked to a `done` or `cancelled` task. The server never blocks a task move because of a linked handoff; the lead checks those.
+
 ## Tools, resources, prompts
 
 ### Tools
@@ -137,6 +174,12 @@ Environment variables, set per harness in its MCP config:
 | `handoff_submit` | the claimant | Records the result and runs verification: → `verified` or `changes_requested` |
 | `handoff_verify` | the claimant, the creator or a human | Re-runs verification and logs it; never changes status |
 | `handoff_review` | the creator or a human | `verified` → `done` (accept) or → `open` (reject, with a reason that is added to `context.tried`) |
+| `task_create` | any agent | A new task (`goal`, `risk` low or normal) in `new`; the caller becomes its lead |
+| `task_transition` | the task's creator | One lead move with its payload (see [Tasks](#tasks)); replies with the next allowed moves |
+| `task_get` | any agent | One task with its timeline, linked handoffs and markdown |
+| `task_list` | any agent | Task summaries (default: unfinished) |
+
+`handoff_create` takes an optional `task` id, and `handoff_list` an optional `task` filter.
 
 ### Resources
 
@@ -144,6 +187,7 @@ Environment variables, set per harness in its MCP config:
 | --- | --- | --- |
 | `handoff://inbox` | any agent | Open handoffs addressed to you or `any`, in claim order |
 | `handoff://{id}` | any agent | The markdown brief of one handoff |
+| `task://{id}` | any agent | One task as markdown: status, rounds, every move with its payload, linked handoffs |
 
 ### Prompts
 
@@ -168,6 +212,11 @@ handproof review <id> accept|reject [reason...]  # accept or reject a verified h
 handproof prune [--older-than 30d] [--dry-run]   # delete old check logs of done/cancelled handoffs
 handproof wait <id>... [--until verified,changes_requested] [--timeout 30m]
                                                 # block until a status changes (or reaches --until)
+handproof task ls [--all] [--status s,...]       # table of tasks
+handproof task show <id>                         # one task as markdown
+handproof task cancel <id> <reason...>           # cancel a task (human)
+handproof approve <id> [--rounds N] [comment...] # pass a task's gate (human)
+handproof reject <id> <comment...>               # send a task back from its gate (human)
 ```
 
 
@@ -187,6 +236,16 @@ Check logs grow with every verification run, up to 1 MiB per check run, under `.
 - Before a handoff, result or note is stored, it is scanned for obvious secrets (AWS keys, `sk-` tokens, GitHub tokens, private key headers) and refused with the matching path.
 - Paths and scope globs are normalized to repo-relative POSIX paths and rejected if they resolve outside the repo.
 - stdio only: the server opens no network listener.
+
+## In practice
+
+One real multi-agent build ran 50 handoffs over about two days (November 9–12, 2026). That's a small sample, but every number below comes from its handoff database:
+
+- 10 of 61 submissions (16%) failed verification: 7 for editing files outside the handoff's scope, 3 for failing checks.
+- 7 more passed verification and were still rejected by the lead agent that created them. In one, a commit carried a `Co-authored-by: Cursor` trailer the project didn't allow, and no check looked for it.
+- 44 handoffs ended `done` and 6 were cancelled.
+
+Verification catches only what its checks and scope rules cover. Review the diff before accepting (see [Known limitations](#known-limitations)).
 
 ## Known limitations
 

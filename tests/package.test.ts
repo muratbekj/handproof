@@ -20,6 +20,7 @@ describe("bun pm pack dry-run (PLAN Step 4)", () => {
     const out = result.stdout.toString();
     expect(out).toContain("package.json");
     expect(out).toContain("dist/bin.js");
+    expect(out).toContain("bin/handproof.js");
     for (const forbidden of ["src/", "tests/", "docs/", "notes/", "examples/", "SPEC.md"]) {
       expect(out).not.toContain(forbidden);
     }

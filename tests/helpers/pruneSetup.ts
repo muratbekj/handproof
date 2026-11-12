@@ -17,7 +17,8 @@ export function isoDaysBefore(base: Date, days: number): string {
 }
 
 export const OLD_UPDATED_AT = isoDaysBefore(PRUNE_NOW, 31);
-export const RECENT_UPDATED_AT = isoDaysBefore(PRUNE_NOW, 29);
+/** Relative to the real clock: the prune CLI uses real time, not PRUNE_NOW. */
+export const RECENT_UPDATED_AT = isoDaysBefore(new Date(), 29);
 
 export function pruneNowEnv(repoDir: string): Record<string, string | undefined> {
   return testEnv({

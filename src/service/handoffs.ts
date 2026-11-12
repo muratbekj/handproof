@@ -28,6 +28,8 @@ export interface HandoffSummary {
   from: string;
   claimBy: string | null;
   leaseUntil: string | null;
+  /** Linked task id, or null. */
+  task: string | null;
   createdAt: string;
 }
 
@@ -45,6 +47,8 @@ export interface ListOptions {
   kind?: Kind;
   to?: string;
   mine?: boolean;
+  /** Only handoffs linked to this task. */
+  task?: string;
   limit?: number;
 }
 
@@ -108,6 +112,7 @@ export function toSummary(h: Handoff): HandoffSummary {
     from: h.from.name,
     claimBy: h.claim?.by.name ?? null,
     leaseUntil: h.claim?.leaseUntil ?? null,
+    task: h.task ?? null,
     createdAt: h.createdAt,
   };
 }
@@ -329,6 +334,15 @@ export function createHandoffService(deps: ServiceDeps): HandoffService & Handof
         if (secrets !== null) return fail(secrets);
         const parsed = parseHandoffInput(raw, { config, repoRoot: paths.worktreeRoot });
         if (!parsed.ok) return fail(validationFailed(parsed.failure.issues));
+        const taskId = parsed.value.task;
+        if (taskId !== undefined) {
+          const taskStatus = repo.taskStatus(taskId);
+          if (taskStatus === null) return fail({ error: "not_found", message: `no task with id ${taskId}`, id: taskId });
+          if (taskStatus === "done" || taskStatus === "cancelled") {
+            const reason = `task ${taskId} is ${taskStatus}; it can't take new handoffs`;
+            return fail({ error: "invalid_transition", message: reason, reason });
+          }
+        }
         const head = git.head();
         if (head === null) {
           return fail({ error: "no_commits", message: "the repository has no commits; commit once before creating a handoff" });
@@ -364,6 +378,7 @@ export function createHandoffService(deps: ServiceDeps): HandoffService & Handof
           ...(f.kind !== undefined ? { kind: f.kind } : {}),
           ...(f.to !== undefined ? { to: f.to } : {}),
           ...(f.mine === true ? { involving: agent.name } : {}),
+          ...(f.task !== undefined ? { task: f.task } : {}),
           ...(f.limit !== undefined ? { limit: f.limit } : {}),
         });
         return ok(rows.map(toSummary));

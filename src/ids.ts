@@ -21,3 +21,10 @@ export function handoffIdTime(id: string): number {
     throw new HandoffsError("not_found", `no handoff with id ${id}`, { id });
   }
 }
+
+export const TASK_ID_RE = /^t_[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/** `t_` + a monotonic ULID. */
+export function newTaskId(): string {
+  return `t_${nextUlid()}`;
+}

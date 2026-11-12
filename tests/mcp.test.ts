@@ -240,7 +240,7 @@ describe("MCP tools and resources", () => {
     }
   });
 
-  test("stdio serve emits no stderr and advertises ten tools", async () => {
+  test("stdio serve emits no stderr and advertises the ten handoff tools and four task tools", async () => {
     const repo = tmpRepo();
     try {
       initRepoHandoffs(repo);
@@ -268,7 +268,9 @@ describe("MCP tools and resources", () => {
       const client = new Client({ name: "stdio-test", version: "0.0.1" });
       await client.connect(transport);
       const tools = await client.listTools();
-      expect(tools.tools).toHaveLength(10);
+      expect(tools.tools.map((t) => t.name).sort()).toEqual(
+        [...TOOL_NAMES, "task_create", "task_get", "task_list", "task_transition"].sort(),
+      );
       await client.close();
 
       expect(stderrChunks.join("")).toBe("");

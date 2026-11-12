@@ -139,7 +139,8 @@ export function renderBrief(h: Handoff, events: HandoffEvent[]): string {
     `${code(h.id)} · **Status:** ${h.status} · **Kind:** ${h.kind} · **Priority:** ${h.priority}` +
     ` · **To:** ${esc(h.to)} · **From:** ${esc(h.from.name)} (${h.from.harness})`;
   const claimed = h.claim === null ? "" : ` · **Claimed by:** ${esc(h.claim.by.name)} until ${h.claim.leaseUntil}`;
-  const repoLine = `**Repo:** ${esc(h.repo.branch)} @ ${h.repo.baseCommit.slice(0, 12)}${claimed}`;
+  const task = h.task === undefined ? "" : ` · **Task:** ${code(h.task)}`;
+  const repoLine = `**Repo:** ${esc(h.repo.branch)} @ ${h.repo.baseCommit.slice(0, 12)}${claimed}${task}`;
 
   const data = [
     section("Goal", esc(h.goal)),

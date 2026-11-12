@@ -2,6 +2,9 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { type RepoPaths, loadConfig, resolveAgent, resolveRepo, runInit } from "./config.ts";
 import { renderBrief } from "./render/markdown.ts";
+import { renderTask } from "./render/task.ts";
+import { TaskStatus } from "./schema/task.ts";
+import type { TaskService, TaskSummary } from "./service/tasks.ts";
 import { type AgentRef, Status } from "./schema/handoff.ts";
 import type { HandoffAdmin, HandoffService, HandoffSummary, ServiceError } from "./service/handoffs.ts";
 import { DEFAULT_PRUNE_DAYS, formatPruneReport, parseOlderThan } from "./service/prune.ts";
@@ -25,6 +28,18 @@ commands:
   prune    delete check logs (.handproof/runs/) of done or cancelled handoffs
              --older-than <N>d     only handoffs finished at least N days ago (default 30d)
              --dry-run             list what would be deleted; delete nothing
+  task ls  list tasks (default: not done or cancelled)
+             --all                 include done and cancelled
+             --status <s>[,<s>]    only these statuses
+  task show <id>  print one task as markdown (timeline, payloads, linked handoffs)
+  task cancel <id> <reason...>
+             cancel a task (human only)
+  approve <id> [--rounds N] [comment...]
+             pass a task's human gate: plan approval (building), final review (done),
+             or blocked (building, with N more fix rounds; default 3)
+  reject <id> <comment...>
+             send a task back from its gate: plan (planning), final review (building),
+             or blocked (planning)
   wait <id> [<id>...]
              block until a handoff's status changes, then print "<id> <status>"
              --until <s>[,<s>]     wait until a status is one of these instead
@@ -57,7 +72,7 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
   const config = loadConfig(paths);
   const agent = resolveAgent(env);
   const opened = openService({ paths, config, agent });
-  const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service }), {
+  const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service, tasks: opened.tasks }), {
     onerror: (err) => {
       console.error(`handproof: ${err.message}`);
     },
@@ -204,6 +219,115 @@ function cmdPrune(args: string[], env: NodeJS.ProcessEnv, cwd: string): number {
   });
 }
 
+function withTasks<T>(env: NodeJS.ProcessEnv, cwd: string, fn: (tasks: TaskService) => T): T {
+  const paths = resolveRepo({ cwd, env });
+  const opened = openService({ paths, config: loadConfig(paths), agent: cliAgent(env) });
+  try {
+    return fn(opened.tasks);
+  } finally {
+    opened.close();
+  }
+}
+
+const TASK_COLUMNS = ["ID", "STATUS", "RISK", "ROUNDS", "GOAL"] as const;
+
+function formatTaskTable(rows: TaskSummary[]): string {
+  const cells = rows.map((t) => [t.id, t.status, t.risk, `${t.rounds.used}/${t.rounds.limit}`, t.goal.replace(/\r?\n/g, " ")]);
+  const all = [[...TASK_COLUMNS], ...cells];
+  const widths = TASK_COLUMNS.map((_, i) => Math.max(...all.map((r) => (r[i] ?? "").length)));
+  return all.map((r) => r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(widths[i] ?? 0))).join("  ")).join("\n");
+}
+
+/** handproof task ls|show|cancel; null = bad arguments. */
+function cmdTask(args: string[], env: NodeJS.ProcessEnv, cwd: string): number | null {
+  const [sub, ...rest] = args;
+  if (sub === "ls") {
+    let status: TaskStatus[] | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      const a = rest[i];
+      if (a === "--all") {
+        status = [...TaskStatus.options];
+      } else if (a === "--status") {
+        const v = rest[++i];
+        if (v === undefined) return null;
+        const parts = v.split(",").map((x) => x.trim()).filter((x) => x !== "");
+        const bad = parts.filter((x) => !TaskStatus.safeParse(x).success);
+        if (parts.length === 0 || bad.length > 0) {
+          console.error(`handproof: validation_failed: unknown status '${bad.join(",") || v}'; use one of: ${TaskStatus.options.join(", ")}`);
+          return 1;
+        }
+        status = parts as TaskStatus[];
+      } else {
+        return null;
+      }
+    }
+    return withTasks(env, cwd, (tasks) => {
+      const r = tasks.list({ ...(status !== undefined ? { status } : {}), limit: 200 });
+      if (!r.ok) return serviceFailure(r.error);
+      process.stdout.write(r.value.length === 0 ? "no tasks\n" : `${formatTaskTable(r.value)}\n`);
+      return 0;
+    });
+  }
+  if (sub === "show") {
+    const [id, ...extra] = rest;
+    if (id === undefined || extra.length > 0) return null;
+    return withTasks(env, cwd, (tasks) => {
+      const r = tasks.get(id);
+      if (!r.ok) return serviceFailure(r.error);
+      process.stdout.write(`${renderTask(r.value.task, r.value.events, r.value.handoffs)}\n`);
+      return 0;
+    });
+  }
+  if (sub === "cancel") {
+    const [id, ...words] = rest;
+    if (id === undefined || words.length === 0) return null;
+    return taskDecision(env, cwd, (tasks) => tasks.cancel(id, { reason: words.join(" ") }));
+  }
+  return null;
+}
+
+function taskDecision(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  fn: (tasks: TaskService) => ReturnType<TaskService["approve"]>,
+): number {
+  return withTasks(env, cwd, (tasks) => {
+    const r = fn(tasks);
+    if (!r.ok) return serviceFailure(r.error);
+    process.stdout.write(`${r.value.id} ${r.value.status}\n`);
+    return 0;
+  });
+}
+
+/** handproof approve <id> [--rounds N] [comment...]; null = bad arguments. */
+function cmdApprove(args: string[], env: NodeJS.ProcessEnv, cwd: string): number | null {
+  const [id, ...rest] = args;
+  if (id === undefined || id.startsWith("-")) return null;
+  let rounds: number | undefined;
+  const words: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i] ?? "";
+    if (a === "--rounds") {
+      const v = rest[++i] ?? "";
+      if (!/^\d+$/.test(v)) return usageError(`--rounds needs a whole number from 1 to 10, got '${v}'`);
+      rounds = Number(v);
+    } else {
+      words.push(a);
+    }
+  }
+  const comment = words.join(" ").trim();
+  return taskDecision(env, cwd, (tasks) =>
+    tasks.approve(id, { ...(comment !== "" ? { comment } : {}), ...(rounds !== undefined ? { rounds } : {}) }),
+  );
+}
+
+/** handproof reject <id> <comment...>; null = bad arguments. */
+function cmdReject(args: string[], env: NodeJS.ProcessEnv, cwd: string): number | null {
+  const [id, ...words] = args;
+  if (id === undefined || words.join(" ").trim() === "") return null;
+  return taskDecision(env, cwd, (tasks) => tasks.reject(id, { comment: words.join(" ") }));
+}
+
 class Interrupted extends Error {}
 
 /** Real sleep that rejects with Interrupted once `signal` aborts. */
@@ -304,6 +428,21 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, cwd: string):
       }
       case "prune":
         return cmdPrune(rest, env, cwd);
+      case "task": {
+        const code = cmdTask(rest, env, cwd);
+        if (code === null) break;
+        return code;
+      }
+      case "approve": {
+        const code = cmdApprove(rest, env, cwd);
+        if (code === null) break;
+        return code;
+      }
+      case "reject": {
+        const code = cmdReject(rest, env, cwd);
+        if (code === null) break;
+        return code;
+      }
       case "wait":
         return await cmdWait(rest, env, cwd);
       case "show":

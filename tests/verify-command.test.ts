@@ -7,6 +7,7 @@ import { OUTPUT_CAP, runCommand, splitCommand } from "../src/verify/command";
 import { checksToRun, runCheck } from "../src/verify/checks";
 import { fixtureHandoff } from "./helpers/handoffFixtures";
 import { removeDir, tmpDir } from "./helpers/tmp";
+import { processGone } from "./helpers/process";
 
 const split = splitCommand;
 
@@ -120,7 +121,8 @@ describe("runCommand and runCheck", () => {
       const pidText = fs.readFileSync(path.join(repoRoot, "pid"), "utf8").trim();
       const pid = Number(pidText);
       expect(Number.isFinite(pid)).toBe(true);
-      expect(() => process.kill(pid, 0)).toThrow();
+      // Dead or a zombie: the orphaned sleep is reaped asynchronously after the group kill.
+      expect(await processGone(pid)).toBe(true);
     } finally {
       removeDir(repoRoot);
     }

@@ -19,6 +19,10 @@ const TOOL_NAMES = [
   "handoff_submit",
   "handoff_verify",
   "handoff_review",
+  "task_create",
+  "task_transition",
+  "task_get",
+  "task_list",
 ];
 
 const PROMPT_NAMES = ["create", "pickup", "review"];
