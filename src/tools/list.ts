@@ -10,6 +10,7 @@ const ListArgs = z.object({
   kind: Kind.optional(),
   to: z.string().optional().describe('Only handoffs addressed to this agent name (or "any")'),
   mine: z.boolean().optional().describe("Only handoffs you created or currently hold"),
+  task: z.string().optional().describe("Only handoffs linked to this task id (t_…)"),
   limit: z.number().int().min(1).max(200).optional().describe("Max results (default 50)"),
 });
 

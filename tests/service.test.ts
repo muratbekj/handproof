@@ -18,6 +18,7 @@ const SUMMARY_KEYS: (keyof HandoffSummary)[] = [
   "from",
   "claimBy",
   "leaseUntil",
+  "task",
   "createdAt",
 ];
 
