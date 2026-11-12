@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { TASK_ID_RE } from "../ids.ts";
 
 export const Kind = z.enum(["implement", "fix", "review", "investigate", "test"]);
 export type Kind = z.infer<typeof Kind>;
@@ -45,6 +46,11 @@ export const HandoffInput = z.object({
     allowed: z.array(z.string()).min(1), // globs: "src/auth/**"
     forbidden: z.array(z.string()).default([]), // "**/migrations/**"
   }),
+  task: z
+    .string()
+    .regex(TASK_ID_RE, "expected a task id like t_01JC…")
+    .optional()
+    .describe("Task this handoff belongs to (t_…); optional"),
   acceptance: z
     .array(
       z.object({

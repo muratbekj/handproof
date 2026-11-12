@@ -1,4 +1,6 @@
 import type { AgentRef, Handoff, Kind, Status } from "../schema/handoff.ts";
+import type { TaskStatus } from "../schema/task.ts";
+import { insertTaskEvent } from "./task-repo.ts";
 import type { Db } from "./db.ts";
 
 export type EventType =
@@ -39,6 +41,8 @@ export interface ListFilter {
   to?: string;
   /** from_agent = name OR claim_by = name */
   involving?: string;
+  /** Only handoffs linked to this task. */
+  task?: string;
   limit?: number;
 }
 
@@ -74,6 +78,8 @@ export interface HandoffRepo {
   expireVerifications(nowIso: string, leaseUntil: string): string[];
   /** seq ASC */
   events(id: string): HandoffEvent[];
+  /** Status of a task, for linking checks; null when there is no such task. */
+  taskStatus(id: string): TaskStatus | null;
 }
 
 export const DEFAULT_LIST_LIMIT = 50;
@@ -143,8 +149,8 @@ export function createRepo(db: Db): HandoffRepo {
   const insertTx = db.transaction((h: Handoff, ev: NewEvent): void => {
     db.run(
       `INSERT INTO handoffs (id, schema_version, status, kind, to_agent, priority, from_agent,
-         claim_json, claim_by, lease_until, created_at, updated_at, doc)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         claim_json, claim_by, lease_until, created_at, updated_at, doc, task_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         h.id,
         h.schemaVersion,
@@ -159,9 +165,18 @@ export function createRepo(db: Db): HandoffRepo {
         h.createdAt,
         h.updatedAt,
         toDoc(h),
+        h.task ?? null,
       ],
     );
     insertEvent(h.id, ev);
+    if (h.task !== undefined) {
+      insertTaskEvent(db, h.task, {
+        at: ev.at,
+        actor: ev.actor,
+        type: "handoff_linked",
+        data: { handoff: h.id, title: h.title, kind: h.kind },
+      });
+    }
   });
 
   const tryClaimTx = db.transaction((id: string, by: AgentRef, leaseUntil: string, at: string): boolean => {
@@ -300,6 +315,10 @@ export function createRepo(db: Db): HandoffRepo {
         where.push("(from_agent = ? OR claim_by = ?)");
         params.push(f.involving, f.involving);
       }
+      if (f.task !== undefined) {
+        where.push("task_id = ?");
+        params.push(f.task);
+      }
       params.push(clampLimit(f.limit));
       const sql = `SELECT ${COLS} FROM handoffs ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
         ORDER BY created_at ASC, id ASC LIMIT ?`;
@@ -348,6 +367,11 @@ export function createRepo(db: Db): HandoffRepo {
         )
         .all(id)
         .map(fromEventRow);
+    },
+
+    taskStatus(id) {
+      const row = db.query<{ status: string }, [string]>("SELECT status FROM tasks WHERE id = ?").get(id);
+      return row === null ? null : (row.status as TaskStatus);
     },
   };
 }

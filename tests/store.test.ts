@@ -79,13 +79,13 @@ describe("migrate", () => {
 
     let db: Db | null = openDb(dbPath, { migrations: [] });
     try {
-      expect(migrate(db)).toEqual([1]);
+      expect(migrate(db)).toEqual(MIGRATIONS.map((m) => m.version));
 
       const tables = tableNames(db);
       expect(tables).toContain("handoffs");
       expect(tables).toContain("events");
       expect(tables).toContain("schema_migrations");
-      expect(migrationVersions(db)).toEqual([1]);
+      expect(migrationVersions(db)).toEqual(MIGRATIONS.map((m) => m.version));
 
       expect(migrate(db)).toEqual([]);
       db.close();
@@ -94,7 +94,7 @@ describe("migrate", () => {
       const reopened = openDb(dbPath);
       try {
         expect(migrate(reopened)).toEqual([]);
-        expect(migrationVersions(reopened)).toEqual([1]);
+        expect(migrationVersions(reopened)).toEqual(MIGRATIONS.map((m) => m.version));
       } finally {
         reopened.close();
       }
@@ -262,7 +262,7 @@ describe("concurrent migration", () => {
 
         const db = openDb(dbPath);
         try {
-          expect(migrationVersions(db)).toEqual([1]);
+          expect(migrationVersions(db)).toEqual(MIGRATIONS.map((m) => m.version));
         } finally {
           db.close();
         }

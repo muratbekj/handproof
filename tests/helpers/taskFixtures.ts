@@ -1,4 +1,7 @@
-import type { LeadMove } from "../../src/schema/task";
+import { newTaskId } from "../../src/ids";
+import type { LeadMove, Task } from "../../src/schema/task";
+
+const AT = "2026-11-11T10:00:00.000Z";
 
 export const TESTS_OK = { passed: 12, failed: 0, failing: [] };
 export const FINAL = {
@@ -35,4 +38,23 @@ export const VALID_PAYLOADS: Record<LeadMove, Record<string, unknown>> = {
   "verifying>awaiting_human_review": { ...FINAL, brief: "Task #1 review …" },
   "verifying>done": FINAL,
 };
+
+
+export function fixtureTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: newTaskId(),
+    schemaVersion: 1,
+    goal: "Add rate limiting to POST /login",
+    risk: "normal",
+    status: "new",
+    from: { name: "lead", harness: "other" },
+    repo: { root: "/r", worktree: "/r", branch: "main" },
+    rounds: { used: 0, limit: 3 },
+    flags: { severeEver: false },
+    planCommit: null,
+    createdAt: AT,
+    updatedAt: AT,
+    ...overrides,
+  };
+}
 
