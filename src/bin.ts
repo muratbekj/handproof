@@ -57,7 +57,7 @@ async function cmdServe(env: NodeJS.ProcessEnv, cwd: string): Promise<number> {
   const config = loadConfig(paths);
   const agent = resolveAgent(env);
   const opened = openService({ paths, config, agent });
-  const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service }), {
+  const handle = serveStdio(() => createServer({ paths, config, agent, service: opened.service, tasks: opened.tasks }), {
     onerror: (err) => {
       console.error(`handproof: ${err.message}`);
     },
