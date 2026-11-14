@@ -233,7 +233,7 @@ Check logs grow with every verification run, up to 1 MiB per check run, under `.
 - A handoff never carries a shell command. It can only name a check defined in `.handproof/config.json`, which the repo owner commits. Checks run without a shell, with a timeout, and with output capped at the last 1 MiB per run (logged under `.handproof/runs/`).
 - `.handproof/config.json` is protected: an implementer who edits it fails the scope check.
 - Handoff text from another agent is wrapped in a labelled `<handoff-data>` block that says it is data, not instructions. Text inside it can't close or open that block.
-- Before a handoff, result or note is stored, it is scanned for obvious secrets (AWS keys, `sk-` tokens, GitHub tokens, private key headers) and refused with the matching path.
+- Before a handoff, result or note is stored, it is scanned for obvious secrets (AWS keys, `sk-` tokens, GitHub tokens — classic `ghp_`, fine-grained `github_pat_`, OAuth `gho_`/`ghu_`/`ghs_`/`ghr_` — Slack tokens, Google API keys, Stripe live keys, private key headers) and refused with the matching path.
 - Paths and scope globs are normalized to repo-relative POSIX paths and rejected if they resolve outside the repo.
 - stdio only: the server opens no network listener.
 

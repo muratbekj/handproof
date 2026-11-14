@@ -49,6 +49,56 @@ describe("scanSecrets", () => {
     expect(scanSecrets("AKIAIOSFODNN7EXAMPLEX", ["goal"])).toEqual([]);
   });
 
+  test("github fine-grained token shape", () => {
+    const pat = `github_pat_${"a".repeat(22)}_${"b".repeat(59)}`;
+    expect(scanSecrets(pat, ["goal"])).toEqual([{ path: "goal", pattern: "github_fine_grained" }]);
+    expect(scanSecrets(`github_pat_${"a".repeat(21)}_${"b".repeat(59)}`, ["goal"])).toEqual([]);
+    expect(scanSecrets(`github_pat_${"a".repeat(22)}_${"b".repeat(58)}`, ["goal"])).toEqual([]);
+    expect(scanSecrets("github_pat_ is not a token", ["goal"])).toEqual([]);
+  });
+
+  test("github oauth tokens (gho/ghu/ghs/ghr)", () => {
+    for (const prefix of ["gho", "ghu", "ghs", "ghr"]) {
+      const token = `${prefix}_${"c".repeat(36)}`;
+      expect(scanSecrets(token, ["goal"])).toEqual([{ path: "goal", pattern: "github_oauth" }]);
+      expect(scanSecrets(`${prefix}_${"c".repeat(35)}`, ["goal"])).toEqual([]);
+    }
+    expect(scanSecrets("gho_ is not a token", ["goal"])).toEqual([]);
+  });
+
+  test("slack tokens", () => {
+    expect(scanSecrets(`xoxb-${"1".repeat(12)}-${"a".repeat(12)}`, ["note"])).toEqual([
+      { path: "note", pattern: "slack_token" },
+    ]);
+    for (const prefix of ["xoxp", "xoxa", "xoxr", "xoxs"]) {
+      expect(scanSecrets(`${prefix}-${"d".repeat(10)}`, ["note"])).toEqual([
+        { path: "note", pattern: "slack_token" },
+      ]);
+    }
+    expect(scanSecrets("xoxb-", ["note"])).toEqual([]);
+    expect(scanSecrets("xoxb-short", ["note"])).toEqual([]);
+    expect(scanSecrets("my xoxo token", ["note"])).toEqual([]);
+  });
+
+  test("google api keys", () => {
+    const key = `AIza${"A".repeat(35)}`;
+    expect(scanSecrets(key, ["goal"])).toEqual([{ path: "goal", pattern: "google_api_key" }]);
+    expect(scanSecrets(`AIza${"A".repeat(34)}`, ["goal"])).toEqual([]);
+    expect(scanSecrets("AIzaSy is only a prefix", ["goal"])).toEqual([]);
+  });
+
+  test("stripe live keys only, not test keys", () => {
+    expect(scanSecrets(`sk_live_${"a".repeat(24)}`, ["goal"])).toEqual([
+      { path: "goal", pattern: "stripe_live_key" },
+    ]);
+    expect(scanSecrets(`rk_live_${"b".repeat(24)}`, ["goal"])).toEqual([
+      { path: "goal", pattern: "stripe_live_key" },
+    ]);
+    expect(scanSecrets(`sk_live_${"a".repeat(23)}`, ["goal"])).toEqual([]);
+    expect(scanSecrets(`sk_test_${"a".repeat(24)}`, ["goal"])).toEqual([]);
+    expect(scanSecrets(`rk_test_${"b".repeat(24)}`, ["goal"])).toEqual([]);
+  });
+
   test("multiple hits in one value tree", () => {
     const hits = scanSecrets(
       { goal: ghpToken(), context: { summary: `uses ${AWS_EXAMPLE}` } },
