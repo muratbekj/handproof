@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import packageJson from "../package.json";
+import { BUN } from "./helpers/bun";
 import { AGENTS, initRepoHandoffs } from "./helpers/serviceSetup";
 import { testEnv } from "./helpers/env";
 import { processGone } from "./helpers/process";
@@ -21,7 +22,7 @@ function run(cmd: string[], env: Record<string, string | undefined> = testEnv())
 
 beforeAll(() => {
   // The launcher runs the built server, so dist/bin.js must be current.
-  const build = run(["bun", "run", "build"]);
+  const build = run([BUN, "run", "build"]);
   if (build.exitCode !== 0) throw new Error(`build failed: ${build.stderr}`);
 });
 
@@ -32,7 +33,7 @@ describe("npx launcher (bin/handproof.js)", () => {
   });
 
   test("under Bun, runs the server", () => {
-    const result = run(["bun", LAUNCHER, "--version"]);
+    const result = run([BUN, LAUNCHER, "--version"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe(packageJson.version);
   });

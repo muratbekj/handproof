@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { main } from "../src/bin";
 import { parseTimeout, waitForStatus, type StatusReader } from "../src/service/wait";
 import { captureStderr, captureStdoutStderr } from "./helpers/cliCapture";
+import { BUN } from "./helpers/bun";
 import { testEnv } from "./helpers/env";
 import {
   criteriaFor,
@@ -287,7 +288,7 @@ describe("waitForStatus (plan acceptance 15–22)", () => {
         HANDPROOF_HARNESS: "other",
       });
 
-      const proc = Bun.spawn(["bun", BIN, "wait", id, "--timeout", "1s"], {
+      const proc = Bun.spawn([BUN, BIN, "wait", id, "--timeout", "1s"], {
         cwd: repo.dir,
         env,
         stdout: "pipe",
@@ -406,7 +407,7 @@ describe("handproof wait CLI (t-ac23)", () => {
         HANDPROOF_HARNESS: "other",
       });
 
-      const proc = Bun.spawn(["bun", BIN, "wait", id, "--until", "verified"], {
+      const proc = Bun.spawn([BUN, BIN, "wait", id, "--until", "verified"], {
         cwd: repo.dir,
         env,
         stdout: "pipe",
@@ -442,7 +443,7 @@ describe("handproof wait CLI (t-ac23)", () => {
         expect(w.service.claim(id2).ok).toBe(true);
         w.close();
 
-        const waiter = Bun.spawn(["bun", BIN, "wait", id2], {
+        const waiter = Bun.spawn([BUN, BIN, "wait", id2], {
           cwd: repo2.dir,
           env: testEnv({ HANDPROOF_REPO: repo2.dir }),
           stdout: "pipe",

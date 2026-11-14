@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
 import validFixture from "./fixtures/handoffs/valid.json";
+import { BUN } from "./helpers/bun";
 import { AGENTS, openTestService } from "./helpers/serviceSetup";
 import { tmpRepo } from "./helpers/tmpRepo";
 
@@ -31,7 +32,7 @@ function spawnClaimWorker(repoDir: string, agentName: string, handoffId: string)
     resolveResult = resolve;
   });
 
-  const proc = Bun.spawn(["bun", WORKER, repoDir, agentName, handoffId], {
+  const proc = Bun.spawn([BUN, WORKER, repoDir, agentName, handoffId], {
     cwd: PROJECT_ROOT,
     ipc(message) {
       if (message === "ready") {

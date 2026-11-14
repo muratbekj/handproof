@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import packageJson from "../package.json";
+import { BUN } from "./helpers/bun";
 import { removeDir, tmpDir } from "./helpers/tmp";
 import { testEnv } from "./helpers/env";
 import { tmpRepo } from "./helpers/tmpRepo";
@@ -11,7 +12,7 @@ const GITIGNORE_LINES = [".handproof/handoffs.db", ".handproof/handoffs.db-*", "
 
 describe("bun pm pack dry-run (PLAN Step 4)", () => {
   test("pack list excludes src, tests, docs, notes, examples, SPEC", () => {
-    const result = Bun.spawnSync(["bun", "pm", "pack", "--dry-run"], {
+    const result = Bun.spawnSync([BUN, "pm", "pack", "--dry-run"], {
       cwd: PROJECT_ROOT,
       stdout: "pipe",
       stderr: "pipe",
@@ -33,7 +34,7 @@ describe("packaged tarball install (PLAN Step 4)", () => {
     const installDir = tmpDir("handoffs-install-");
     const repo = tmpRepo();
     try {
-      const pack = Bun.spawnSync(["bun", "pm", "pack", "--destination", packDir], {
+      const pack = Bun.spawnSync([BUN, "pm", "pack", "--destination", packDir], {
         cwd: PROJECT_ROOT,
         stdout: "pipe",
         stderr: "pipe",
@@ -42,7 +43,7 @@ describe("packaged tarball install (PLAN Step 4)", () => {
       const tarball = fs.readdirSync(packDir).find((f) => f.endsWith(".tgz"));
       if (tarball === undefined) throw new Error("pack did not produce a .tgz");
 
-      const add = Bun.spawnSync(["bun", "add", path.join(packDir, tarball)], {
+      const add = Bun.spawnSync([BUN, "add", path.join(packDir, tarball)], {
         cwd: installDir,
         stdout: "pipe",
         stderr: "pipe",
