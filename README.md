@@ -268,7 +268,7 @@ Run by a human; not automated.
 
 ## Contributing
 
-Bug reports, client setup checks and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the checks to run and what a PR needs.
+Bug reports, client setup checks and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the checks to run and what a PR needs. Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 - **Unchecked clients:** if you can run Codex, [#9](https://github.com/muratbekj/handproof/issues/9) lists what to check. For another client, use the *Client setup report* issue form.
 - **Security issues:** report them privately from the **Security** tab, not in a public issue.

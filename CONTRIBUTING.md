@@ -2,6 +2,8 @@
 
 Thanks for helping. Bug reports, client setup checks, docs fixes and code are all welcome.
 
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Before you start
 
 - **Bugs and features:** open an issue first for anything bigger than a small fix, so we can agree on the approach before you write code.
