@@ -9,6 +9,7 @@ import { testEnv } from "./helpers/env";
 import { processGone } from "./helpers/process";
 import { removeDir, tmpDir } from "./helpers/tmp";
 import { tmpRepo } from "./helpers/tmpRepo";
+import { BUN } from "./helpers/bun";
 
 const PROJECT_ROOT = path.join(import.meta.dir, "..");
 const LAUNCHER = path.join(PROJECT_ROOT, "bin/handproof.js");
@@ -21,7 +22,7 @@ function run(cmd: string[], env: Record<string, string | undefined> = testEnv())
 
 beforeAll(() => {
   // The launcher runs the built server, so dist/bin.js must be current.
-  const build = run(["bun", "run", "build"]);
+  const build = run([BUN, "run", "build"]);
   if (build.exitCode !== 0) throw new Error(`build failed: ${build.stderr}`);
 });
 
@@ -32,7 +33,7 @@ describe("npx launcher (bin/handproof.js)", () => {
   });
 
   test("under Bun, runs the server", () => {
-    const result = run(["bun", LAUNCHER, "--version"]);
+    const result = run([BUN, LAUNCHER, "--version"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe(packageJson.version);
   });
