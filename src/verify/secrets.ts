@@ -1,7 +1,16 @@
 import type { Issue } from "../schema/errors.ts";
 import { formatPath } from "../schema/errors.ts";
 
-export type SecretPattern = "aws_access_key" | "sk_token" | "private_key" | "github_token";
+export type SecretPattern =
+  | "aws_access_key"
+  | "sk_token"
+  | "private_key"
+  | "github_token"
+  | "github_fine_grained"
+  | "github_oauth"
+  | "slack_token"
+  | "google_api_key"
+  | "stripe_live_key";
 
 export interface SecretHit {
   path: string;
@@ -13,6 +22,20 @@ const PATTERNS: readonly { pattern: SecretPattern; re: RegExp }[] = [
   { pattern: "sk_token", re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { pattern: "private_key", re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { pattern: "github_token", re: /ghp_[A-Za-z0-9]{36}(?![A-Za-z0-9])/ },
+  {
+    pattern: "github_fine_grained",
+    re: /(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{22}_[A-Za-z0-9_]{59}(?![A-Za-z0-9_])/,
+  },
+  {
+    pattern: "github_oauth",
+    re: /(?<![A-Za-z0-9_])(?:gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}(?![A-Za-z0-9])/,
+  },
+  { pattern: "slack_token", re: /\bxox[bpras]-[0-9A-Za-z-]{10,}/ },
+  { pattern: "google_api_key", re: /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}(?![A-Za-z0-9_-])/ },
+  {
+    pattern: "stripe_live_key",
+    re: /(?<![A-Za-z0-9_])(?:sk|rk)_live_[0-9A-Za-z]{24,}(?![A-Za-z0-9])/,
+  },
 ];
 
 /** Every string inside `value` (objects and arrays walked), one hit per (path, pattern). */
