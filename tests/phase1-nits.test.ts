@@ -6,6 +6,7 @@ import { createServer } from "../src/server";
 import { openService } from "../src/service/open";
 import type { HandoffService } from "../src/service/handoffs";
 import validFixture from "./fixtures/handoffs/valid.json";
+import { BUN } from "./helpers/bun";
 import { AGENTS, initRepoHandoffs } from "./helpers/serviceSetup";
 import { tmpRepo } from "./helpers/tmpRepo";
 
@@ -36,7 +37,7 @@ function spawnClaimWorker(repoDir: string, agentName: string, handoffIdOrDash: s
     resolveResult = resolve;
   });
 
-  const proc = Bun.spawn(["bun", WORKER, repoDir, agentName, handoffIdOrDash], {
+  const proc = Bun.spawn([BUN, WORKER, repoDir, agentName, handoffIdOrDash], {
     cwd: PROJECT_ROOT,
     ipc(message) {
       if (message === "ready") {

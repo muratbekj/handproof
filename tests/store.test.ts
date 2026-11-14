@@ -6,6 +6,7 @@ import {
   MIGRATIONS,
   type Migration,
 } from "../src/store/migrations/index";
+import { BUN } from "./helpers/bun";
 import { removeDir, tmpDir } from "./helpers/tmp";
 
 const NOW = "2026-11-03T00:00:00.000Z";
@@ -220,12 +221,12 @@ describe("concurrent migration", () => {
       const worker = path.join(import.meta.dir, "helpers", "dbWorker.ts");
       const projectRoot = path.resolve(import.meta.dir, "..");
 
-      const first = Bun.spawn(["bun", worker, dbPath, ready1, go], {
+      const first = Bun.spawn([BUN, worker, dbPath, ready1, go], {
         cwd: projectRoot,
         stdout: "pipe",
         stderr: "pipe",
       });
-      const second = Bun.spawn(["bun", worker, dbPath, ready2, go], {
+      const second = Bun.spawn([BUN, worker, dbPath, ready2, go], {
         cwd: projectRoot,
         stdout: "pipe",
         stderr: "pipe",
