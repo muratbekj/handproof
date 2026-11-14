@@ -275,4 +275,3 @@ Bug reports, client setup checks and pull requests are welcome. [CONTRIBUTING.md
 ## License
 
 [MIT](LICENSE)
-
