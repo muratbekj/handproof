@@ -4,7 +4,6 @@
 
 A typed, verifiable handoff contract between coding agents over MCP. One agent packages a task (goal, context, scope, acceptance criteria), another claims it, and the server checks the result before anyone can accept it.
 
-<!-- demo.gif goes here (T16): Claude Code hands a task to Cursor, Cursor's out-of-scope package.json edit is caught by verification, the fix, the accept. -->
 
 ## Requirements
 
