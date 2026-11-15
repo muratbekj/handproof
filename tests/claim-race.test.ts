@@ -3,6 +3,7 @@ import * as path from "node:path";
 import validFixture from "./fixtures/handoffs/valid.json";
 import { AGENTS, openTestService } from "./helpers/serviceSetup";
 import { tmpRepo } from "./helpers/tmpRepo";
+import { BUN } from "./helpers/bun";
 
 const WORKER = path.join(import.meta.dir, "helpers", "claimWorker.ts");
 const PROJECT_ROOT = path.join(import.meta.dir, "..");
@@ -31,7 +32,7 @@ function spawnClaimWorker(repoDir: string, agentName: string, handoffId: string)
     resolveResult = resolve;
   });
 
-  const proc = Bun.spawn(["bun", WORKER, repoDir, agentName, handoffId], {
+  const proc = Bun.spawn([BUN, WORKER, repoDir, agentName, handoffId], {
     cwd: PROJECT_ROOT,
     ipc(message) {
       if (message === "ready") {

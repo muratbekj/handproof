@@ -11,6 +11,7 @@ import validFixture from "./fixtures/handoffs/valid.json";
 import { AGENTS, initRepoHandoffs } from "./helpers/serviceSetup";
 import { testEnv } from "./helpers/env";
 import { tmpRepo } from "./helpers/tmpRepo";
+import { BUN } from "./helpers/bun";
 
 const PROJECT_ROOT = path.join(import.meta.dir, "..");
 const BIN = path.join(PROJECT_ROOT, "src/bin.ts");
@@ -252,7 +253,7 @@ describe("MCP tools and resources", () => {
 
       const stderrChunks: string[] = [];
       const transport = new StdioClientTransport({
-        command: "bun",
+        command: BUN,
         args: [BIN, "serve"],
         env: env as Record<string, string>,
         cwd: PROJECT_ROOT,

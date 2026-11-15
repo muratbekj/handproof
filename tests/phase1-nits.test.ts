@@ -8,6 +8,7 @@ import type { HandoffService } from "../src/service/handoffs";
 import validFixture from "./fixtures/handoffs/valid.json";
 import { AGENTS, initRepoHandoffs } from "./helpers/serviceSetup";
 import { tmpRepo } from "./helpers/tmpRepo";
+import { BUN } from "./helpers/bun";
 
 const T0 = new Date("2026-11-03T12:00:00.000Z");
 const SAME_NAME_AGENT = "phase0-same-agent";
@@ -36,7 +37,7 @@ function spawnClaimWorker(repoDir: string, agentName: string, handoffIdOrDash: s
     resolveResult = resolve;
   });
 
-  const proc = Bun.spawn(["bun", WORKER, repoDir, agentName, handoffIdOrDash], {
+  const proc = Bun.spawn([BUN, WORKER, repoDir, agentName, handoffIdOrDash], {
     cwd: PROJECT_ROOT,
     ipc(message) {
       if (message === "ready") {
