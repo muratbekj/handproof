@@ -6,6 +6,12 @@ import { DEFAULT_CONFIG, resolveRepo, runInit } from "../src/config";
 import { testEnv } from "./helpers/env";
 import { tmpRepo, type TmpRepo } from "./helpers/tmpRepo";
 
+const CURSOR_COMMAND_FILES = [
+  "handproof-create.md",
+  "handproof-pickup.md",
+  "handproof-review.md",
+] as const;
+
 const GITIGNORE_LINES = [
   ".handproof/handoffs.db",
   ".handproof/handoffs.db-*",
@@ -132,6 +138,47 @@ describe("runInit", () => {
       for (const line of GITIGNORE_LINES) {
         expect(countLine(gitignore, line)).toBe(1);
       }
+    });
+  });
+
+  test("writes the three Cursor commands under .cursor/commands", () => {
+    withRepo((repo) => {
+      const paths = resolveRepo({ cwd: repo.dir, env: testEnv() });
+
+      const res = runInit(paths);
+
+      for (const name of CURSOR_COMMAND_FILES) {
+        const rel = `.cursor/commands/${name}`;
+        expect(res.created).toContain(rel);
+        const content = fs.readFileSync(path.join(paths.root, rel), "utf8");
+        // Cursor uses the first heading as the command's description.
+        expect(content.split("\n")[0]).toMatch(/^# \S/);
+        expect(content.endsWith("\n")).toBe(true);
+      }
+      const read = (name: string): string =>
+        fs.readFileSync(path.join(paths.root, ".cursor/commands", name), "utf8");
+      expect(read("handproof-create.md")).toContain("`handoff_create`");
+      expect(read("handproof-create.md")).toContain("Don't do the task yourself");
+      expect(read("handproof-pickup.md")).toContain("`handoff_claim`");
+      expect(read("handproof-review.md")).toContain("`handoff_review`");
+      expect(read("handproof-review.md")).toContain("Never invent a reason");
+    });
+  });
+
+  test("never overwrites an existing Cursor command and reports it as existing", () => {
+    withRepo((repo) => {
+      const paths = resolveRepo({ cwd: repo.dir, env: testEnv() });
+      const dir = path.join(paths.root, ".cursor", "commands");
+      fs.mkdirSync(dir, { recursive: true });
+      const custom = "# my own pickup\n";
+      fs.writeFileSync(path.join(dir, "handproof-pickup.md"), custom);
+
+      const res = runInit(paths);
+
+      expect(fs.readFileSync(path.join(dir, "handproof-pickup.md"), "utf8")).toBe(custom);
+      expect(res.skipped).toContain(".cursor/commands/handproof-pickup.md");
+      expect(res.created).toContain(".cursor/commands/handproof-create.md");
+      expect(res.created).toContain(".cursor/commands/handproof-review.md");
     });
   });
 

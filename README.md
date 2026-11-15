@@ -26,20 +26,20 @@ bunx handproof init
 $EDITOR .handproof/config.json
 ```
 
-1. `init` writes `.handproof/config.json` and adds the runtime files to `.gitignore`.
-2. Set the commands your checks run (`test`, `typecheck`, `lint`, …) and commit the config.
+1. `init` writes `.handproof/config.json`, adds the runtime files to `.gitignore`, and writes three Cursor commands to `.cursor/commands/` (`/handproof-create`, `/handproof-pickup`, `/handproof-review`).
+2. Set the commands your checks run (`test`, `typecheck`, `lint`, …) and commit the config and `.cursor/commands/`.
 3. Connect each session with its own agent name, for example a planner and an implementer ([Connect your agents](#connect-your-agents)).
-4. **Planner session:** describe the task and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run the `create` prompt (`/mcp__handproof__create` in Claude Code). In apps without prompt support, ask it to *"call the handproof `handoff_create` tool"*. If you don't say "don't write code", the agent may start doing the task itself.
-5. **Implementer session:** run the `pickup` prompt, or ask it to *"call the handproof `handoff_claim` tool"*. The reply has the brief, the working rules and the exact `handoff_submit` call to make when done. The implementer works inside the scope and submits; the server runs the checks and the scope check.
-6. **Review:** in the planner's session run the `review` prompt (or ask it to call `handoff_review`), or review from any terminal with `handproof review <id> accept` (the CLI counts as a human).
+4. **Planner session:** describe the task and say it's for another agent, for example: *"Don't write any code, I'm handing this off: add rate limiting to login. Only touch src/auth. Tests must pass."* Then run the `create` prompt (`/mcp__handproof__create` in Claude Code, `/handproof-create` in Cursor). In apps without prompt support, ask it to *"call the handproof `handoff_create` tool"*. If you don't say "don't write code", the agent may start doing the task itself.
+5. **Implementer session:** run the `pickup` prompt (`/handproof-pickup` in Cursor), or ask it to *"call the handproof `handoff_claim` tool"*. The reply has the brief, the working rules and the exact `handoff_submit` call to make when done. The implementer works inside the scope and submits; the server runs the checks and the scope check.
+6. **Review:** in the planner's session run the `review` prompt (`/handproof-review` in Cursor) or ask it to call `handoff_review`, or review from any terminal with `handproof review <id> accept` (the CLI counts as a human).
 
 ## Connect your agents
 
 | App | Register the server | Prompts |
 | --- | --- | --- |
 | Claude Code | `claude mcp add handproof -e HANDPROOF_AGENT=planner -e HANDPROOF_HARNESS=claude-code -- bunx handproof serve` ([`examples/claude-code.md`](examples/claude-code.md)) | Yes: `/mcp__handproof__create`, `/mcp__handproof__pickup`, `/mcp__handproof__review`. One word per argument, so type the task in chat, not after the command. |
-| Cursor editor | `.cursor/mcp.json` in the repo ([`examples/cursor.mcp.json`](examples/cursor.mcp.json)) | Yes: type `/` in the Agent chat to find `create`, `pickup` and `review` (checked in Cursor 2.1) |
-| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | Yes: run `/mcp`, select handproof, and its prompts are listed (checked in 2026.11.11) |
+| Cursor editor | `.cursor/mcp.json` in the repo ([`examples/cursor.mcp.json`](examples/cursor.mcp.json)) | Yes: `/handproof-create`, `/handproof-pickup`, `/handproof-review`, the custom commands `init` writes to `.cursor/commands/`. Cursor 2.1 also lists the MCP prompts in the Agent chat's `/` menu. |
+| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | Yes: `/handproof-create`, `/handproof-pickup`, `/handproof-review` from `.cursor/commands/`. The MCP prompts themselves are only listed under `/mcp` → handproof, not as `/` commands (checked in 2026.11.13). |
 | Codex CLI | `codex mcp add handproof --env HANDPROOF_AGENT=codex-impl --env HANDPROOF_HARNESS=codex -- bunx handproof serve`, or a project `.codex/config.toml` ([`examples/codex.md`](examples/codex.md)) | Codex documents MCP tools, not prompts: ask it to call the tools |
 | Anything else | any MCP client that starts a stdio server: `bunx handproof serve` with `HANDPROOF_AGENT` set | Use the tools |
 
@@ -63,7 +63,7 @@ Two Codex sessions, or two Claude Code sessions, work the same way as two differ
 
 - Give each session its own git worktree (`git worktree add ../myrepo-impl`). All worktrees of a repo share one handproof database, and each submit is checked in the implementer's own worktree, so parallel sessions don't see each other's changes.
 - Put each session's config in its worktree: `.cursor/mcp.json`, `.codex/config.toml` (Codex reads it in trusted projects), or for Claude Code run `claude mcp add …` inside that worktree (its default scope is the current directory).
-- Add those config folders (`.cursor/`, `.codex/`) to `.gitignore`. The scope check counts untracked files that aren't ignored, so a stray per-worktree config would fail a submit.
+- Add those configs (`.cursor/mcp.json`, `.codex/`) to `.gitignore`. The scope check counts untracked files that aren't ignored, so a stray per-worktree config would fail a submit. Keep `.cursor/commands/` committed: it's the same in every worktree.
 
 Example: Codex only, planner `codex-planner` in the main checkout and implementer `codex-impl` in `../myrepo-impl`, each with its own `.codex/config.toml`; you review with `handproof review <id> accept`.
 
@@ -190,7 +190,7 @@ Rules the server enforces:
 
 ### Prompts
 
-In Claude Code the prompts are `/mcp__handproof__create`, `/mcp__handproof__pickup` and `/mcp__handproof__review`; the Cursor editor shows them in the Agent chat's `/` menu, and the Cursor Agent CLI under `/mcp` → handproof. Every argument is optional and a single word. Clients without prompt support (Codex, as far as its docs say) can use the tools directly: `handoff_claim`'s reply ends with the same working rules and `handoff_submit` call that `pickup` gives.
+In Claude Code the prompts are `/mcp__handproof__create`, `/mcp__handproof__pickup` and `/mcp__handproof__review`; in Cursor, use the matching custom commands `/handproof-create`, `/handproof-pickup` and `/handproof-review` that `init` writes to `.cursor/commands/` (the Cursor Agent CLI lists MCP prompts only under `/mcp` → handproof). Each custom command tells the agent which tools to call, so it does what the matching prompt does, and an id or `accept`/`reject` typed after it works the same way. Prompt arguments are all optional and a single word. Clients without prompt support (Codex, as far as its docs say) can use the tools directly: `handoff_claim`'s reply ends with the same working rules and `handoff_submit` call that `pickup` gives.
 
 | Prompt | Arguments | Effect |
 | --- | --- | --- |
@@ -203,7 +203,7 @@ In Claude Code the prompts are `/mcp__handproof__create`, `/mcp__handproof__pick
 The CLI acts as `human-cli` unless `HANDPROOF_AGENT` is set.
 
 ```bash
-handproof init                               # write .handproof/config.json and .gitignore lines
+handproof init                               # write .handproof/config.json, .gitignore lines and .cursor/commands/
 handproof serve                              # run the MCP server over stdio
 handproof ls [--all] [--status open,claimed]     # table of handoffs
 handproof show <id>                              # markdown brief
@@ -262,7 +262,7 @@ Run by a human; not automated.
 1. Configure both harnesses in the same repo: Claude Code as `planner` and Cursor as `cursor-impl` (see [`examples/`](examples/)).
 2. In Claude Code, describe a small task, say not to write code because it's being handed off, and run `/mcp__handproof__create`; the agent calls `handoff_create`. Note the returned id.
 3. In Cursor, call `handoff_list`; the same id appears.
-4. In Cursor, call `handoff_claim` with that id (or, in the Cursor editor, run the `pickup` prompt); it returns `claimed`, the markdown brief and the `handoff_submit` call to make.
+4. In Cursor, call `handoff_claim` with that id (or run `/handproof-pickup <id>`); it returns `claimed`, the markdown brief and the `handoff_submit` call to make.
 5. In a terminal, run `handproof show <id>`; it shows the handoff claimed by `cursor-impl`.
 
 ## Contributing

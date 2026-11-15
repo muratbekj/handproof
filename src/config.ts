@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 import * as z from "zod/v4";
 import { HandoffsError } from "./errors.ts";
+import { CURSOR_COMMANDS, CURSOR_COMMANDS_DIR } from "./cursor-commands.ts";
 import { formatPath } from "./schema/errors.ts";
 import { AgentRef, Harness } from "./schema/handoff.ts";
 
@@ -213,7 +214,10 @@ export interface InitResult {
   skipped: string[];
 }
 
-/** Idempotent: writes .handproof/config.json if missing and appends missing .gitignore lines. Paths in the result are relative to the repo root. */
+/**
+ * Idempotent: writes .handproof/config.json if missing, appends missing .gitignore lines, and writes each
+ * missing Cursor command under .cursor/commands/. Never overwrites a file. Paths in the result are relative to the repo root.
+ */
 export function runInit(paths: RepoPaths): InitResult {
   const result: InitResult = { created: [], updated: [], skipped: [] };
 
@@ -244,6 +248,19 @@ export function runInit(paths: RepoPaths): InitResult {
     next += missing.map((l) => `${l}\n`).join("");
     writeFileSync(gitignorePath, next);
     (existed ? result.updated : result.created).push(gitignoreRel);
+  }
+
+  const commandsDir = join(paths.root, CURSOR_COMMANDS_DIR);
+  mkdirSync(commandsDir, { recursive: true });
+  for (const [name, content] of Object.entries(CURSOR_COMMANDS)) {
+    const rel = `${CURSOR_COMMANDS_DIR}/${name}`;
+    const file = join(commandsDir, name);
+    if (existsSync(file)) {
+      result.skipped.push(rel);
+    } else {
+      writeFileSync(file, content, { flag: "wx" });
+      result.created.push(rel);
+    }
   }
 
   return result;
