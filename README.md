@@ -39,7 +39,7 @@ $EDITOR .handproof/config.json
 | --- | --- | --- |
 | Claude Code | `claude mcp add handproof -e HANDPROOF_AGENT=planner -e HANDPROOF_HARNESS=claude-code -- bunx handproof serve` ([`examples/claude-code.md`](examples/claude-code.md)) | Yes: `/mcp__handproof__create`, `/mcp__handproof__pickup`, `/mcp__handproof__review`. One word per argument, so type the task in chat, not after the command. |
 | Cursor editor | `.cursor/mcp.json` in the repo ([`examples/cursor.mcp.json`](examples/cursor.mcp.json)) | Yes: `/handproof-create`, `/handproof-pickup`, `/handproof-review`, the custom commands `init` writes to `.cursor/commands/`. Cursor 2.1 also lists the MCP prompts in the Agent chat's `/` menu. |
-| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | Yes: `/handproof-create`, `/handproof-pickup`, `/handproof-review` from `.cursor/commands/`. The MCP prompts themselves are only listed under `/mcp` → handproof, not as `/` commands. |
+| Cursor Agent CLI (`cursor-agent`) | the same `.cursor/mcp.json` | Yes: `/handproof-create`, `/handproof-pickup`, `/handproof-review` from `.cursor/commands/`. The MCP prompts themselves are only listed under `/mcp` → handproof, not as `/` commands (checked in 2026.11.13). |
 | Codex CLI | `codex mcp add handproof --env HANDPROOF_AGENT=codex-impl --env HANDPROOF_HARNESS=codex -- bunx handproof serve`, or a project `.codex/config.toml` ([`examples/codex.md`](examples/codex.md)) | Codex documents MCP tools, not prompts: ask it to call the tools |
 | Anything else | any MCP client that starts a stdio server: `bunx handproof serve` with `HANDPROOF_AGENT` set | Use the tools |
 
