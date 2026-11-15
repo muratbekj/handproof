@@ -7,6 +7,7 @@ Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT
 ## Before you start
 
 - **Bugs and features:** open an issue first for anything bigger than a small fix, so we can agree on the approach before you write code.
+- **Claim the issue before you start:** check that nobody is assigned, then comment that you're taking it so a maintainer can assign you (assign yourself if you have access). This keeps two people from fixing the same thing. If someone is already assigned and you'd like to work on it together, say so in the issue and agree on how to split it with them first.
 - **Client setups:** if you can run a client that's marked unverified (see the [`needs verification`](https://github.com/muratbekj/handproof/labels/needs%20verification) label), checking it and reporting back is one of the most useful things you can do.
 - **Security issues:** don't open a public issue. Report it privately from the repo's **Security** tab → **Report a vulnerability**.
 
