@@ -1,0 +1,65 @@
+import { Kind } from "../schema/handoff.ts";
+
+// The `create` prompt's text, shared with the Cursor command that `init` writes (src/cursor-commands.ts).
+// Imports nothing from config.ts, so config.ts can import the Cursor commands without a cycle.
+
+const KIND_MEANING: Record<Kind, string> = {
+  implement: "build new behavior; changes stay inside scope.allowed",
+  fix: "fix a bug; changes stay inside scope.allowed",
+  test: "add or repair tests; changes stay inside scope.allowed",
+  review: "read and report findings; any file change fails the scope check",
+  investigate: "find out and report; any file change fails the scope check",
+};
+
+function checksLine(names: string[] | null): string {
+  if (names === null) {
+    return "`acceptance[].check`, when set, must be one of the checks named under `checks` in `.handproof/config.json`; with no checks configured, leave out `check`.";
+  }
+  if (names.length === 0) return "No checks are configured; acceptance items will be self-reported, so leave out `check`.";
+  return `\`acceptance[].check\`, when set, must be one of the configured checks: ${names.map((n) => `\`${n}\``).join(", ")}.`;
+}
+
+/**
+ * The `create` instructions. `checks` is the configured check names, or null when they aren't known
+ * (a Cursor command file written by `init`, which points at the config instead). `hint` is the text typed
+ * after the command, "" when none.
+ */
+export function createInstructions(checks: string[] | null, hint: string): string {
+  const lines = [
+    "Hand the task off to another coding agent with exactly one `handoff_create` call.",
+    "",
+    "Use the task the user described in this conversation. If it isn't clear what the task is, ask the user before calling `handoff_create`.",
+    "",
+    "## Don't do the task yourself",
+    "You are the planner: another agent does the work. Don't edit, create or delete files for this task, and don't commit.",
+    "If you already changed files for this task in this session, stop and tell the user which files, then ask which they want before calling `handoff_create`:",
+    "- a `review` handoff of those changes (the other agent checks them and edits nothing), or",
+    "- you revert your changes first, then hand off the whole task as `implement`.",
+    "Never hand off `implement` work on top of your own uncommitted changes to the same files.",
+  ];
+  if (hint !== "") {
+    lines.push(
+      "",
+      `Request hint: ${hint}`,
+      "",
+      "That hint was typed after the command. Slash clients may pass only its first word, so when the conversation says more, the conversation wins.",
+    );
+  }
+  lines.push(
+    "",
+    "## Field rules",
+    "- `goal`: at least 40 characters, saying what done looks like.",
+    "- `scope.allowed`: repo-relative globs the implementer may change (e.g. `src/auth/**`); `scope.forbidden` for globs it must not touch.",
+    `- ${checksLine(checks)}`,
+    "- A handoff never carries shell commands: checks run only from the committed config.",
+    "- No secrets (tokens, keys, passwords) anywhere in the handoff.",
+    "- What was already tried goes in `context.tried`; decisions that are fixed go in `context.decisions`.",
+    "",
+    "## Kinds",
+    ...Kind.options.map((k) => `- \`${k}\`: ${KIND_MEANING[k]}`),
+    "",
+    "## After the call",
+    "On `validation_failed`, fix each issue using its `fix` and call `handoff_create` again. When it succeeds, tell the user the returned handoff id.",
+  );
+  return lines.join("\n");
+}
