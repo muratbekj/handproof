@@ -140,4 +140,68 @@ describe("npx launcher (bin/handproof.js)", () => {
       repo.cleanup();
     }
   });
+
+  test.skipIf(NODE === null)("under Node, SIGTERM to the launcher stops the server when bun on PATH is a shell wrapper", async () => {
+    const repo = tmpRepo();
+    const fifoDir = tmpDir("handproof-fifo-");
+    const wrapperDir = tmpDir("handproof-wrapper-");
+    let wrapperPid: number | undefined;
+    let serverPid: number | undefined;
+    let stdinFd: number | undefined;
+    try {
+      initRepoHandoffs(repo);
+      // A #!/bin/sh wrapper like a pnpm global shim: it calls the real Bun WITHOUT exec,
+      // so the wrapper shell stays the launcher's direct child and the real Bun server
+      // is the wrapper's child. Killing only the direct child leaves the server running.
+      const wrapper = path.join(wrapperDir, "bun");
+      fs.writeFileSync(wrapper, `#!/bin/sh\n"${BUN}" "$@"\n`);
+      fs.chmodSync(wrapper, 0o755);
+      // stdin is a FIFO this test holds open, so the server never sees EOF when the launcher dies:
+      // it stops only if the signal reaches it.
+      const fifo = path.join(fifoDir, "stdin");
+      if (Bun.spawnSync(["mkfifo", fifo]).exitCode !== 0) throw new Error("mkfifo failed");
+      stdinFd = fs.openSync(fifo, fs.constants.O_RDWR);
+      const launcher = Bun.spawn([NODE ?? "node", LAUNCHER, "serve"], {
+        cwd: PROJECT_ROOT,
+        env: testEnv({
+          HANDPROOF_REPO: repo.dir,
+          HANDPROOF_AGENT: AGENTS.cursorImpl.name,
+          PATH: `${wrapperDir}:${process.env.PATH ?? ""}`,
+        }),
+        stdin: stdinFd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      for (let i = 0; i < 100 && wrapperPid === undefined; i++) {
+        const out = Bun.spawnSync(["pgrep", "-P", String(launcher.pid)]).stdout.toString().trim();
+        if (out !== "") wrapperPid = Number(out.split("\n")[0]);
+        else await Bun.sleep(20);
+      }
+      if (wrapperPid === undefined) throw new Error("launcher never started the wrapper");
+      for (let i = 0; i < 100 && serverPid === undefined; i++) {
+        const out = Bun.spawnSync(["pgrep", "-P", String(wrapperPid)]).stdout.toString().trim();
+        if (out !== "") serverPid = Number(out.split("\n")[0]);
+        else await Bun.sleep(20);
+      }
+      if (serverPid === undefined) throw new Error("wrapper never started the server");
+
+      launcher.kill("SIGTERM");
+      await launcher.exited;
+      expect(launcher.signalCode).toBe("SIGTERM");
+      expect(await processGone(serverPid)).toBe(true);
+    } finally {
+      // If the signal wasn't forwarded, don't leave an orphaned server behind.
+      if (serverPid !== undefined) {
+        try {
+          process.kill(serverPid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+      if (stdinFd !== undefined) fs.closeSync(stdinFd);
+      removeDir(fifoDir);
+      removeDir(wrapperDir);
+      repo.cleanup();
+    }
+  });
 });
